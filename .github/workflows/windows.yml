@@ -27,6 +27,11 @@ jobs:
           cache: pip
       - name: Instalar dependencias fijadas
         run: python -m pip install -r requirements-dev.txt
+      - name: Preparar FFmpeg verificado para todas las pruebas
+        shell: pwsh
+        run: |
+          python -c "from tools.build_windows import get_ffmpeg; get_ffmpeg()"
+          Add-Content -Path $env:GITHUB_PATH -Value "$pwd\dist\MediaDownloader"
       - name: Pruebas esenciales y del actualizador
         run: python -m pytest -q --junitxml=results.xml
       - name: Arranque de interfaz desde fuentes

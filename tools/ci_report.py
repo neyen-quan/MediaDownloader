@@ -30,8 +30,8 @@ def report():
                 if captured is not None and captured.text:
                     sections.append(f"<pre>{html.escape(captured.text[-20000:])}</pre>\n")
     # Only this controlled local fixture's engine logs are published, never application/user logs.
-    logs = sorted(Path(tempfile.gettempdir()).glob(
-        "pytest-of-*/pytest-*/test_dash*/result/engine.log"), key=lambda p: p.stat().st_mtime)
+    logs = sorted({p.resolve() for p in Path(tempfile.gettempdir()).glob(
+        "pytest-of-*/pytest-*/test_dash*/result/engine.log")}, key=lambda p: p.stat().st_mtime)
     for log in logs[-2:]:
         sections.append("\n### Motor DASH de la prueba local\n\n<pre>" +
                         html.escape(log.read_text(encoding="utf-8", errors="replace")[-20000:]) + "</pre>\n")
@@ -45,9 +45,11 @@ def report():
         # A separate ref makes the report retrievable with Git when the cloud API is unavailable.
         # Commit-tree does not alter the checkout, its index or any application source.
         def git(*args, data=None, env=None):
-            result = subprocess.run(["git", *args], input=data, capture_output=True,
-                                    text=True, check=True, env=env)
-            return result.stdout.strip()
+            # Git's tree input is a binary protocol; Windows text pipes would add CR to filenames.
+            payload = data.encode("utf-8") if data is not None else None
+            result = subprocess.run(["git", *args], input=payload, capture_output=True,
+                                    check=True, env=env)
+            return result.stdout.decode("utf-8").strip()
         blob = git("hash-object", "-w", "--stdin", data=content)
         tree = git("mktree", data=f"100644 blob {blob}\tREPORT.md\n")
         identity = dict(os.environ, GIT_AUTHOR_NAME="github-actions[bot]",
