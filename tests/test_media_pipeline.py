@@ -42,6 +42,10 @@ def test_dash_best_video_and_audio_are_muxed_without_reencoding(tmp_path, monkey
     class Handler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, *_):
             pass
+        def do_GET(self):
+            requests_seen.append(self.path)
+            super().do_GET()
+    requests_seen = []
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(served)))
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     monkeypatch.setenv("NO_PROXY", "127.0.0.1")
@@ -53,7 +57,15 @@ def test_dash_best_video_and_audio_are_muxed_without_reencoding(tmp_path, monkey
         root.insert(0, base)
         item = Media(1, "video", "ytdl:fixture.mp4", "mkv", "instagram-dash",
                      "https://instagram.com/reel/test/", manifest=ET.tostring(root, encoding="unicode"))
-        path = fetch(item, tmp_path / "result", threading.Event(), lambda *_: None)
+        try:
+            path = fetch(item, tmp_path / "result", threading.Event(), lambda *_: None)
+        except Exception as error:
+            error.add_note("HTTP requests: " + repr(requests_seen))
+            error.add_note("Served files: " + repr([p.name for p in served.iterdir()]))
+            log = tmp_path / "result" / "engine.log"
+            if log.exists():
+                error.add_note(log.read_text(encoding="utf-8", errors="replace"))
+            raise
         probe = subprocess.run([ffprobe, "-v", "error", "-show_streams", "-of", "json", str(path)],
                                 capture_output=True, text=True, check=True, timeout=20)
         streams = json.loads(probe.stdout)["streams"]
