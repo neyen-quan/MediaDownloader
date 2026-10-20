@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from mediadownloader import __version__
 from mediadownloader.updater import build_package
+from tools.make_icon import make_icon
 
 
 def run(*args):
@@ -62,13 +63,15 @@ def main():
     if sys.platform != "win32":
         raise SystemExit("El portable Windows debe compilarse en Windows, no se renombra un binario Linux.")
     # A console subsystem plus hide-early retains working stdout for isolated engine processes.
+    icon = make_icon(ROOT / "build" / "branding" / "MediaDownloader.ico")
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--console",
         "--hide-console", "hide-early", "--name", "MediaDownloader",
+        "--icon", str(icon),
         "--collect-all", "gallery_dl", "--collect-all", "yt_dlp",
         "--exclude-module", "PySide6.QtWebEngineCore", "--exclude-module", "PySide6.QtWebEngineWidgets",
         "--exclude-module", "PySide6.QtPdf", "main.py")
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--windowed",
-        "--name", "MediaDownloaderUpdater", "updater_entry.py")
+        "--name", "MediaDownloaderUpdater", "--icon", str(icon), "updater_entry.py")
     target = ROOT / "dist" / "MediaDownloader"
     shutil.copy2(ROOT / "dist" / "MediaDownloaderUpdater.exe", target)
     shutil.copy2(ROOT / "LEEME.txt", target)
