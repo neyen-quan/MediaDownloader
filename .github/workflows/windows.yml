@@ -13,6 +13,8 @@ permissions:
 jobs:
   portable:
     runs-on: windows-2022
+    permissions:
+      contents: write # Publish controlled test diagnostics on a separate ci/ ref.
     timeout-minutes: 35
     env:
       QT_QPA_PLATFORM: offscreen
@@ -49,7 +51,7 @@ jobs:
           if-no-files-found: error
       - name: Informe de pruebas
         if: always()
-        run: python tools/ci_report.py
+        run: python tools/ci_report.py --publish
       - name: Conservar informes de pruebas
         if: always()
         uses: actions/upload-artifact@v4
