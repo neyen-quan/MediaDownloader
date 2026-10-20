@@ -1,170 +1,181 @@
-SCENARIO absolute
-FILES ['chunk-stream0-00001.m4s', 'chunk-stream1-00001.m4s', 'init-stream0.m4s', 'init-stream1.m4s', 'manifest.mpd']
-<?xml version="1.0" encoding="utf-8"?>
-<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xmlns="urn:mpeg:dash:schema:mpd:2011"
-	xmlns:xlink="http://www.w3.org/1999/xlink"
-	xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
-	profiles="urn:mpeg:dash:profile:isoff-live:2011"
-	type="static"
-	mediaPresentationDuration="PT1.0S"
-	maxSegmentDuration="PT5.0S"
-	minBufferTime="PT2.0S">
-	<ProgramInformation>
-	</ProgramInformation>
-	<ServiceDescription id="0">
-	</ServiceDescription>
-	<Period id="0" start="PT0.0S">
-		<AdaptationSet id="0" contentType="video" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" frameRate="10/1" maxWidth="160" maxHeight="90" par="16:9">
-			<Representation id="0" mimeType="video/mp4" codecs="avc1.64000a" bandwidth="15744" width="160" height="90" sar="1:1">
-				<SegmentTemplate timescale="10240" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
-					<SegmentTimeline>
-						<S t="0" d="10240" />
-					</SegmentTimeline>
-				</SegmentTemplate>
-			</Representation>
-		</AdaptationSet>
-		<AdaptationSet id="1" contentType="audio" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true">
-			<Representation id="1" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="69000" audioSamplingRate="44100">
-				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
-				<SegmentTemplate timescale="44100" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
-					<SegmentTimeline>
-						<S t="0" d="44100" />
-					</SegmentTimeline>
-				</SegmentTemplate>
-			</Representation>
-		</AdaptationSet>
-	</Period>
-</MPD>
+.F                                                                       [100%]
+================================== FAILURES ===================================
+_________ test_dash_best_video_and_audio_are_muxed_without_reencoding _________
 
-HTTP "GET /init-stream0.m4s HTTP/1.1" 200 -
-HTTP "GET /chunk-stream0-00001.m4s HTTP/1.1" 200 -
-HTTP "GET /init-stream1.m4s HTTP/1.1" 200 -
-HTTP "GET /chunk-stream1-00001.m4s HTTP/1.1" 200 -
-RESULT PASS 11150
+tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_dash_best_video_and_audio0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001E9BD6DEC00>
+
+    def test_dash_best_video_and_audio_are_muxed_without_reencoding(tmp_path, monkeypatch):
+        executable = os.environ.get("MEDIADOWNLOADER_TEST_EXE")
+        if executable:
+            monkeypatch.setattr("mediadownloader.engines.engine_command",
+                                lambda engine, args: [executable, "--engine", engine, *args])
+        ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
+        if not ffmpeg or not ffprobe:
+            pytest.skip("FFmpeg no est� disponible; la compilaci�n Windows debe ejecutar esta prueba tras instalarlo")
+        served = tmp_path / "served"; served.mkdir()
+        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+            "color=c=blue:s=160x90:r=10", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
+            "-t", "1", "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-c:a", "aac",
+            "-f", "dash", str(served / "manifest.mpd")], check=True, timeout=30)
+        class Handler(http.server.SimpleHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+            def do_GET(self):
+                requests_seen.append(self.path)
+                super().do_GET()
+        requests_seen = []
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(served)))
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+        try:
+            # Instagram's inline MPD carries absolute media locations; make the fixture equivalent.
+            root = ET.fromstring((served / "manifest.mpd").read_text())
+            ns = "{urn:mpeg:dash:schema:mpd:2011}"
+            base = ET.Element(ns + "BaseURL"); base.text = f"http://127.0.0.1:{server.server_port}/"
+            root.insert(0, base)
+            item = Media(1, "video", "ytdl:fixture.mp4", "mkv", "instagram-dash",
+                         "https://instagram.com/reel/test/", manifest=ET.tostring(root, encoding="unicode"))
+            try:
+>               path = fetch(item, tmp_path / "result", threading.Event(), lambda *_: None)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_media_pipeline.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+item = Media(index=1, kind='video', url='ytdl:fixture.mp4', ext='mkv', engine='instagram-dash', source='https://instagram.com...>\n\t\t\t\t</ns0:SegmentTemplate>\n\t\t\t</ns0:Representation>\n\t\t</ns0:AdaptationSet>\n\t</ns0:Period>\n</ns0:MPD>')
+folder = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_dash_best_video_and_audio0/result')
+cancel = <threading.Event at 0x1e9bd6dfcb0: unset>
+progress = <function test_dash_best_video_and_audio_are_muxed_without_reencoding.<locals>.<lambda> at 0x000001E9BD6FFD80>
+cookies = ''
+
+    def fetch(item, folder, cancel, progress, cookies=""):
+        folder.mkdir(parents=True, exist_ok=True)
+        if item.engine == "gallery-dl":
+            path = folder / item.filename
+            direct_download(item.url, path, cancel, progress, cookies, item.source)
+            progress(100, "Descarga completa.")
+            return path
+        # A separate process makes extraction, fragment downloads and muxing cancellable.
+        args = ["--ignore-config", "--no-warnings", "--newline", "--socket-timeout", "25",
+                "--progress-template", "download:MDPROGRESS:%(progress._percent_str)s",
+                "--retries", "3", "--fragment-retries", "3", "--no-part",
+                "-f", "bv*+ba/b", "--merge-output-format", "mkv", "--remux-video", "mkv",
+                "--write-info-json", "-o", str(folder / "media.%(ext)s")]
+        if cookies:
+            args += ["--cookies", cookies]
+        if ffmpeg_location():
+            args += ["--ffmpeg-location", ffmpeg_location()]
+        if item.selector:
+            args += ["--match-filter", f"id = '{item.selector}'"]
+        progress(0, "Descargando la mejor calidad y el audio�")
+        # yt-dlp's progress goes to a small file to avoid blocking; parsed while the process runs.
+        engine = "yt-dlp"
+        command_args = [*args, item.source]
+        if item.engine == "instagram-dash":
+            request = folder / "dash-request.json"
+            request.write_text(json.dumps({"manifest": item.manifest, "folder": str(folder),
+                                           "cookies": cookies, "ffmpeg": ffmpeg_location()}), encoding="utf-8")
+            engine, command_args = "instagram-dash", [str(request)]
+        log = folder / "engine.log"
+        with log.open("wb") as output:
+            proc = subprocess.Popen(engine_command(engine, command_args), stdout=output,
+                                    stderr=output, creationflags=CREATE_NO_WINDOW,
+                                    start_new_session=os.name != "nt")
+            started = time.monotonic()
+            try:
+                while proc.poll() is None:
+                    check_cancel(cancel)
+                    if time.monotonic() - started > 3600:
+                        raise UserError("La descarga super� una hora. Intent� otra vez.")
+                    # Do not share the writer's file offset: read through a separate descriptor on disk
+                    # is not portable for TemporaryFile. Report bytes in output media instead.
+                    size = sum(p.stat().st_size for p in folder.glob("media.*") if p.is_file())
+                    with log.open("rb") as log_reader:
+                        log_reader.seek(max(0, log.stat().st_size - 4000))
+                        matches = re.findall(rb"MDPROGRESS:\s*([\d.]+)%", log_reader.read())
+                    percent = min(99, int(float(matches[-1]))) if matches else 0
+                    progress(percent, f"Descargando y combinando sin recompresi�n: {size / 1048576:.1f} MB�")
+                    cancel.wait(0.25)
+                if proc.returncode:
+>                   raise UserError("No se pudo obtener el video con audio. Volv� a Analizar, carg� una sesi�n local o actualiz� el programa.")
+E                   mediadownloader.core.UserError: No se pudo obtener el video con audio. Volv� a Analizar, carg� una sesi�n local o actualiz� el programa.
+E                   HTTP requests: ['/init-stream0.m4s']
+E                   Served files: ['manifest.mpd']
+E                   [info] instagram: Downloading 1 format(s): dash-0+dash-1
+E                   [info] Writing video metadata as JSON to: C:\Users\runneradmin\AppData\Local\Temp\pytest-of-runneradmin\pytest-0\test_dash_best_video_and_audio0\result\media.info.json
+E                   [dashsegments] Total fragments: 2
+E                   [download] Destination: C:\Users\runneradmin\AppData\Local\Temp\pytest-of-runneradmin\pytest-0\test_dash_best_video_and_audio0\result\media.fdash-0.mp4
+E                   ERROR: 
+E                   [download] Got error: HTTP Error 404: File not found
+E                   Traceback (most recent call last):
+E                     File "main.py", line 26, in <module>
+E                       raise SystemExit(main())
+E                                        ^^^^^^
+E                     File "main.py", line 17, in main
+E                       return download_instagram_dash(sys.argv[1])
+E                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E                     File "mediadownloader\engines.py", line 280, in download_instagram_dash
+E                       ydl.process_ie_result({"id": "instagram", "title": "Instagram", "extractor": "instagram",
+E                     File "yt_dlp\YoutubeDL.py", line 1946, in process_ie_result
+E                     File "yt_dlp\YoutubeDL.py", line 3134, in process_video_result
+E                     File "yt_dlp\YoutubeDL.py", line 194, in wrapper
+E                     File "yt_dlp\YoutubeDL.py", line 3570, in process_info
+E                     File "yt_dlp\YoutubeDL.py", line 3323, in dl
+E                     File "yt_dlp\downloader\common.py", line 480, in download
+E                     File "yt_dlp\downloader\dash.py", line 68, in real_download
+E                     File "yt_dlp\downloader\fragment.py", line 375, in download_and_append_fragments_multiple
+E                     File "yt_dlp\downloader\fragment.py", line 513, in download_and_append_fragments
+E                     File "yt_dlp\downloader\fragment.py", line 459, in download_fragment
+E                     File "yt_dlp\utils\_utils.py", line 5289, in __iter__
+E                     File "yt_dlp\downloader\fragment.py", line 456, in error_callback
+E                     File "yt_dlp\downloader\common.py", line 413, in report_retry
+E                     File "yt_dlp\utils\_utils.py", line 5296, in report_retry
+E                     File "yt_dlp\downloader\common.py", line 416, in <lambda>
+E                     File "yt_dlp\YoutubeDL.py", line 1165, in report_error
+E                     File "yt_dlp\YoutubeDL.py", line 1103, in trouble
+E                   yt_dlp.utils.DownloadError: ERROR: 
+E                   [download] Got error: HTTP Error 404: File not found
+E                   [PYI-2496:ERROR] Failed to execute script 'main' due to unhandled exception!
+
+mediadownloader\engines.py:240: UserError
+=========================== short test summary info ===========================
+FAILED tests/test_media_pipeline.py::test_dash_best_video_and_audio_are_muxed_without_reencoding - mediadownloader.core.UserError: No se pudo obtener el video con audio. Volv� a Analizar, carg� una sesi�n local o actualiz� el programa.
+HTTP requests: ['/init-stream0.m4s']
+Served files: ['manifest.mpd']
 [info] instagram: Downloading 1 format(s): dash-0+dash-1
-[info] Writing video metadata as JSON to: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.info.json
+[info] Writing video metadata as JSON to: C:\Users\runneradmin\AppData\Local\Temp\pytest-of-runneradmin\pytest-0\test_dash_best_video_and_audio0\result\media.info.json
 [dashsegments] Total fragments: 2
-[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.fdash-0.mp4
-
-[download]  50.0% of ~   1.59KiB at    1.91KiB/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
-
-[download]  25.0% of ~   3.18KiB at    1.91KiB/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
-
-[download]  93.4% of ~   1.92KiB at    1.91KiB/s ETA Unknown (frag 1/2)MDPROGRESS:93.4%
-
-[download]  65.8% of ~   2.92KiB at    1.91KiB/s ETA Unknown (frag 1/2)MDPROGRESS:65.8%
-
-[download]  63.0% of ~   3.05KiB at    1.91KiB/s ETA Unknown (frag 2/2)MDPROGRESS:63.0%
-
-[download] 100% of    1.92KiB in 00:00:00 at 15.37KiB/s                MDPROGRESS:100.0%
-
-[dashsegments] Total fragments: 2
-[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.fdash-1.m4a
-
-[download]  50.0% of ~   1.49KiB at      0.00B/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
-
-[download]  25.0% of ~   2.98KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
-
-[download]  17.4% of ~  10.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:17.4%
-
-[download]  33.9% of ~  11.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:33.9%
-
-[download]  59.3% of ~  13.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:59.3%
-
-[download]  59.0% of ~  17.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:59.0%
-
-[download]  51.9% of ~  19.38KiB at      0.00B/s ETA Unknown (frag 2/2)MDPROGRESS:51.9%
-
-[download] 100% of   10.06KiB in 00:00:00 at 321.77KiB/s               MDPROGRESS:100.0%
-
-[Merger] Merging formats into "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.mkv"
-Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.fdash-1.m4a (pass -k to keep)
-Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.fdash-0.mp4 (pass -k to keep)
-[VideoRemuxer] Not remuxing media file "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.mkv"; already is in target format mkv
-
-SCENARIO relative
-FILES ['chunk-stream0-00001.m4s', 'chunk-stream1-00001.m4s', 'init-stream0.m4s', 'init-stream1.m4s', 'manifest.mpd']
-<?xml version="1.0" encoding="utf-8"?>
-<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xmlns="urn:mpeg:dash:schema:mpd:2011"
-	xmlns:xlink="http://www.w3.org/1999/xlink"
-	xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
-	profiles="urn:mpeg:dash:profile:isoff-live:2011"
-	type="static"
-	mediaPresentationDuration="PT1.0S"
-	maxSegmentDuration="PT5.0S"
-	minBufferTime="PT2.0S">
-	<ProgramInformation>
-	</ProgramInformation>
-	<ServiceDescription id="0">
-	</ServiceDescription>
-	<Period id="0" start="PT0.0S">
-		<AdaptationSet id="0" contentType="video" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" frameRate="10/1" maxWidth="160" maxHeight="90" par="16:9">
-			<Representation id="0" mimeType="video/mp4" codecs="avc1.64000a" bandwidth="15744" width="160" height="90" sar="1:1">
-				<SegmentTemplate timescale="10240" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
-					<SegmentTimeline>
-						<S t="0" d="10240" />
-					</SegmentTimeline>
-				</SegmentTemplate>
-			</Representation>
-		</AdaptationSet>
-		<AdaptationSet id="1" contentType="audio" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true">
-			<Representation id="1" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="69000" audioSamplingRate="44100">
-				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
-				<SegmentTemplate timescale="44100" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
-					<SegmentTimeline>
-						<S t="0" d="44100" />
-					</SegmentTimeline>
-				</SegmentTemplate>
-			</Representation>
-		</AdaptationSet>
-	</Period>
-</MPD>
-
-HTTP "GET /init-stream0.m4s HTTP/1.1" 200 -
-HTTP "GET /chunk-stream0-00001.m4s HTTP/1.1" 200 -
-HTTP "GET /init-stream1.m4s HTTP/1.1" 200 -
-HTTP "GET /chunk-stream1-00001.m4s HTTP/1.1" 200 -
-RESULT PASS 11150
-[info] instagram: Downloading 1 format(s): dash-0+dash-1
-[info] Writing video metadata as JSON to: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.info.json
-[dashsegments] Total fragments: 2
-[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.fdash-0.mp4
-
-[download]  50.0% of ~   1.59KiB at    2.19KiB/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
-
-[download]  25.0% of ~   3.18KiB at    2.19KiB/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
-
-[download]  93.4% of ~   1.92KiB at    2.19KiB/s ETA Unknown (frag 1/2)MDPROGRESS:93.4%
-
-[download]  65.8% of ~   2.92KiB at    2.19KiB/s ETA Unknown (frag 1/2)MDPROGRESS:65.8%
-
-[download]  63.0% of ~   3.05KiB at    2.53KiB/s ETA Unknown (frag 2/2)MDPROGRESS:63.0%
-
-[download] 100% of    1.92KiB in 00:00:00 at 3.30KiB/s                 MDPROGRESS:100.0%
-
-[dashsegments] Total fragments: 2
-[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.fdash-1.m4a
-
-[download]  50.0% of ~   1.49KiB at      0.00B/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
-
-[download]  25.0% of ~   2.98KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
-
-[download]  17.4% of ~  10.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:17.4%
-
-[download]  33.9% of ~  11.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:33.9%
-
-[download]  59.3% of ~  13.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:59.3%
-
-[download]  59.0% of ~  17.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:59.0%
-
-[download]  51.9% of ~  19.38KiB at      0.00B/s ETA Unknown (frag 2/2)MDPROGRESS:51.9%
-
-[download] 100% of   10.06KiB in 00:00:00 at 322.02KiB/s               MDPROGRESS:100.0%
-
-[Merger] Merging formats into "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.mkv"
-Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.fdash-1.m4a (pass -k to keep)
-Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.fdash-0.mp4 (pass -k to keep)
-[VideoRemuxer] Not remuxing media file "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.mkv"; already is in target format mkv
-
+[download] Destination: C:\Users\runneradmin\AppData\Local\Temp\pytest-of-runneradmin\pytest-0\test_dash_best_video_and_audio0\result\media.fdash-0.mp4
+ERROR: 
+[download] Got error: HTTP Error 404: File not found
+Traceback (most recent call last):
+  File "main.py", line 26, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "main.py", line 17, in main
+    return download_instagram_dash(sys.argv[1])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "mediadownloader\engines.py", line 280, in download_instagram_dash
+    ydl.process_ie_result({"id": "instagram", "title": "Instagram", "extractor": "instagram",
+  File "yt_dlp\YoutubeDL.py", line 1946, in process_ie_result
+  File "yt_dlp\YoutubeDL.py", line 3134, in process_video_result
+  File "yt_dlp\YoutubeDL.py", line 194, in wrapper
+  File "yt_dlp\YoutubeDL.py", line 3570, in process_info
+  File "yt_dlp\YoutubeDL.py", line 3323, in dl
+  File "yt_dlp\downloader\common.py", line 480, in download
+  File "yt_dlp\downloader\dash.py", line 68, in real_download
+  File "yt_dlp\downloader\fragment.py", line 375, in download_and_append_fragments_multiple
+  File "yt_dlp\downloader\fragment.py", line 513, in download_and_append_fragments
+  File "yt_dlp\downloader\fragment.py", line 459, in download_fragment
+  File "yt_dlp\utils\_utils.py", line 5289, in __iter__
+  File "yt_dlp\downloader\fragment.py", line 456, in error_callback
+  File "yt_dlp\downloader\common.py", line 413, in report_retry
+  File "yt_dlp\utils\_utils.py", line 5296, in report_retry
+  File "yt_dlp\downloader\common.py", line 416, in <lambda>
+  File "yt_dlp\YoutubeDL.py", line 1165, in report_error
+  File "yt_dlp\YoutubeDL.py", line 1103, in trouble
+yt_dlp.utils.DownloadError: ERROR: 
+[download] Got error: HTTP Error 404: File not found
+[PYI-2496:ERROR] Failed to execute script 'main' due to unhandled exception!
+1 failed, 1 passed in 1.20s
