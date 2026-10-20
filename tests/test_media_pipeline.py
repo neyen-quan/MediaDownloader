@@ -24,6 +24,7 @@ def test_instagram_extraction_keeps_dash_metadata(monkeypatch):
     monkeypatch.setattr("mediadownloader.engines.run_engine", run)
     items = analyze("https://www.instagram.com/reel/abc/", "", threading.Event(), lambda *_: None)
     assert "output.private=true" in seen
+    assert "extractor.instagram.audio=true" in seen
     assert items[0].engine == "instagram-dash"
 
 

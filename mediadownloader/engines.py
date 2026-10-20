@@ -80,16 +80,32 @@ def run_engine(engine, args, cancel, timeout=180):
 def gallery_items(raw, source):
     result = []
     expected = 0
+    received = 0
     for message in json.loads(raw):
         if isinstance(message, list) and len(message) == 2 and message[0] == -1:
             error = str(message[1].get("message", "")).lower()
             if "proxy" in error or "tunnel" in error:
                 raise UserError("La red o el proxy bloqueó el acceso a Instagram. Revisá los destinos permitidos o la conexión de esta PC.")
+            if any(term in error for term in ("login", "401", "403", "challenge", "sign in")):
+                raise UserError("Instagram pidió iniciar sesión o rechazó la sesión importada. Renová las cookies locales e intentá otra vez.")
+            if "429" in error or "rate limit" in error:
+                raise UserError("Instagram limitó temporalmente las consultas. Esperá antes de volver a analizar.")
             raise UserError("Instagram no permitió analizar toda la publicación. Puede requerir una sesión local o una actualización del motor.")
+        if isinstance(message, list) and message and message[0] == 2:
+            meta = message[-1]
+            if isinstance(meta, dict):
+                expected = max(expected, int(meta.get("count") or 0))
+            continue
         if not isinstance(message, list) or len(message) < 3 or message[0] != 3:
             continue
         url, meta = message[1:3]
+        received += 1
         expected = max(expected, int(meta.get("count") or 0))
+        # gallery-dl counts the optional music track in post.count, even when
+        # audio=false suppresses its URL. Enumerate it (dump-json downloads no
+        # media) and include it in validation, but show only photos and videos.
+        if meta.get("audio_url"):
+            continue
         ext = str(meta.get("extension", Path(urlsplit(url).path).suffix.lstrip(".") or "jpg"))
         video = ext.lower() in {"mp4", "webm", "mov", "mkv", "m4v"}
         # gallery-dl emits every carousel entry in the platform's original order.
@@ -103,8 +119,8 @@ def gallery_items(raw, source):
                             str(meta.get("description", ""))[:200], manifest=manifest))
     if not result:
         raise UserError("Instagram no entregó archivos. Puede exigir iniciar sesión incluso para publicaciones públicas.")
-    if expected and len(result) != expected:
-        raise UserError("Instagram devolvió un carrusel incompleto. Probá con una sesión local; no se mostrará una descarga parcial como completa.")
+    if expected and received != expected:
+        raise UserError(f"Instagram devolvió el contenido incompleto: {received} de {expected} archivos, incluida su pista musical si existe. Probá más tarde o renová la sesión local.")
     return result
 
 
@@ -131,7 +147,7 @@ def analyze(value, cookies, cancel, progress):
     if platform == "instagram":
         args = ["--ignore-config", "--no-input", "--dump-json", "-o", "extractor.instagram.videos=true",
                 "-o", "output.private=true",
-                "-o", "extractor.instagram.previews=false", "-o", "extractor.instagram.audio=false",
+                "-o", "extractor.instagram.previews=false", "-o", "extractor.instagram.audio=true",
                 "-o", "extractor.instagram.order-files=asc",
                 "-o", "extractor.instagram.user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"]
         if cookies:
