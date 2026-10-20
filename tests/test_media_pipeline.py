@@ -1,0 +1,72 @@
+"""Exercise yt-dlp + real FFmpeg muxing against a local DASH fixture, without platform access."""
+import functools
+import http.server
+import json
+import os
+import shutil
+import subprocess
+import threading
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+import pytest
+from mediadownloader.core import Media
+from mediadownloader.engines import fetch, analyze
+
+
+def test_instagram_extraction_keeps_dash_metadata(monkeypatch):
+    seen = []
+    def run(engine, args, cancel):
+        seen.extend(args)
+        return json.dumps([[3, "ytdl:synthetic.mp4", {"extension": "mp4", "count": 1,
+                             "_ytdl_manifest_data": "<MPD/>"}]])
+    monkeypatch.setattr("mediadownloader.engines.run_engine", run)
+    items = analyze("https://www.instagram.com/reel/abc/", "", threading.Event(), lambda *_: None)
+    assert "output.private=true" in seen
+    assert items[0].engine == "instagram-dash"
+
+
+def test_dash_best_video_and_audio_are_muxed_without_reencoding(tmp_path, monkeypatch):
+    executable = os.environ.get("MEDIADOWNLOADER_TEST_EXE")
+    if executable:
+        monkeypatch.setattr("mediadownloader.engines.engine_command",
+                            lambda engine, args: [executable, "--engine", engine, *args])
+    ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
+    if not ffmpeg or not ffprobe:
+        pytest.skip("FFmpeg no está disponible; la compilación Windows debe ejecutar esta prueba tras instalarlo")
+    served = tmp_path / "served"; served.mkdir()
+    subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+        "color=c=blue:s=160x90:r=10", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
+        "-t", "1", "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-c:a", "aac",
+        "-f", "dash", str(served / "manifest.mpd")], check=True, timeout=30)
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(served)))
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    try:
+        # Instagram's inline MPD carries absolute media locations; make the fixture equivalent.
+        root = ET.fromstring((served / "manifest.mpd").read_text())
+        ns = "{urn:mpeg:dash:schema:mpd:2011}"
+        base = ET.Element(ns + "BaseURL"); base.text = f"http://127.0.0.1:{server.server_port}/"
+        root.insert(0, base)
+        item = Media(1, "video", "ytdl:fixture.mp4", "mkv", "instagram-dash",
+                     "https://instagram.com/reel/test/", manifest=ET.tostring(root, encoding="unicode"))
+        path = fetch(item, tmp_path / "result", threading.Event(), lambda *_: None)
+        probe = subprocess.run([ffprobe, "-v", "error", "-show_streams", "-of", "json", str(path)],
+                                capture_output=True, text=True, check=True, timeout=20)
+        streams = json.loads(probe.stdout)["streams"]
+        assert {s["codec_type"] for s in streams} == {"video", "audio"}
+        assert {s["codec_name"] for s in streams} == {"h264", "aac"}
+        assert next(s for s in streams if s["codec_type"] == "video")["width"] == 160
+        # Compare compressed elementary streams by FFmpeg stream hash (no decoder involved).
+        def stream_hash(path, selector):
+            result = subprocess.run([ffmpeg, "-v", "error", "-i", str(path), "-map", selector,
+                "-c", "copy", "-f", "streamhash", "-hash", "sha256", "-"],
+                check=True, capture_output=True, text=True, timeout=20)
+            return result.stdout.strip().split("=")[-1]
+        assert stream_hash(served / "manifest.mpd", "0:v:0") == stream_hash(path, "0:v:0")
+        assert stream_hash(served / "manifest.mpd", "0:a:0") == stream_hash(path, "0:a:0")
+    finally:
+        server.shutdown(); server.server_close(); thread.join()

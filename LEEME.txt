@@ -1,0 +1,45 @@
+MediaDownloader 1.0.0 — Windows 10/11 de 64 bits
+
+ABRIR
+1. Extraé TODO el ZIP en una carpeta propia, por ejemplo Documentos\MediaDownloader.
+2. Abrí MediaDownloader.exe. No hace falta instalar Python, FFmpeg ni herramientas.
+3. Pegá un enlace público HTTPS de Instagram o TikTok y tocá Analizar.
+4. Los elementos aparecen numerados. Elegí uno y cargá su previsualización.
+   En videos, tocá Play para escuchar el audio. La carga puede tardar.
+5. Elegí una carpeta. Guardá el visible, los marcados, todos, o los marcados como ZIP.
+
+CALIDAD Y LÍMITES
+Se guardan los archivos entregados por la plataforma sin recomprimir ni ampliar.
+Si hay pistas separadas, FFmpeg las combina sin recodificar. Pueden guardarse como MKV.
+La calidad accesible depende de la plataforma y de tu sesión. No se recupera calidad inexistente.
+El ZIP mantiene el orden con nombres 001, 002, 003. No se sobrescriben descargas anteriores.
+Un video grande debe descargarse para previsualizarlo y usa espacio temporal.
+Solo descargá contenido que tengas derecho a guardar. No se admiten perfiles ni contenido privado.
+
+SESIÓN OPCIONAL
+Una publicación pública puede exigir iniciar sesión. Sesión local permite importar
+cookies.txt en formato Netscape de tu navegador. Es opcional y queda en esta PC.
+No compartas ese archivo: permite usar tu sesión. El programa no pide contraseñas.
+No evita CAPTCHA, límites por IP, restricciones regionales, permisos o cookies vencidas.
+Usá Quitar sesión para borrar la copia. No hay servidores intermediarios de descarga.
+
+ACTUALIZAR
+1. Descargá un ZIP de actualización de MediaDownloader de una fuente confiable.
+2. Tocá Actualizar programa y elegí el ZIP SIN extraerlo.
+3. El programa comprueba identidad, rutas y hashes, se cierra, actualiza y reinicia.
+4. Si el arranque de prueba falla, restaura la versión anterior automáticamente.
+5. Recuperar versión anterior permite volver atrás. Si no abre la interfaz,
+   cerrá el programa y abrí Recuperar version anterior.cmd en la carpeta portable.
+No se necesitan permisos de administrador en una carpeta propia. Dejá espacio para
+el programa nuevo, la copia anterior y los archivos temporales (varios GB libres).
+
+CONFIGURACIÓN
+La carpeta recordada y las cookies viven en %LOCALAPPDATA%\MediaDownloader.
+Las descargas quedan en la carpeta elegida. Una actualización conserva ambas.
+No muevas ni borres la carpeta mientras se actualiza. Si hay un corte de energía,
+ejecutá el recuperador; conserva también las carpetas .previous y .failed.
+La copia .previous está junto a la carpeta del programa; no la borres si querés volver atrás.
+
+Windows puede advertir que el ejecutable no tiene firma digital. No se incluye un
+certificado de firma. Verificá el origen antes de abrirlo; no se pide desactivar protecciones.
+Si una plataforma cambia, puede hacer falta un nuevo ZIP con motores actualizados.
