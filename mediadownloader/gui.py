@@ -19,6 +19,7 @@ from PySide6.QtMultimediaWidgets import QVideoWidget
 from . import __version__
 from .core import Settings, UserError, Cancelled, data_dir, save_selection
 from .appearance import STYLE, app_icon
+from . import windows_shell
 from . import engines
 from .updater import validate_package, locations
 
@@ -59,6 +60,7 @@ class Window(QMainWindow):
         self.cache = tempfile.TemporaryDirectory(prefix="MediaDownloader-preview-")
         self.previews = {}
         self.pending_close = False
+        self.shell_hwnd = None
         self.pixmap = None
 
         def label(text, name="muted"):
@@ -565,6 +567,12 @@ class Window(QMainWindow):
             self.cache.cleanup()
         except OSError:
             pass
+        if self.shell_hwnd is not None:
+            try:
+                windows_shell.clear_window(self.shell_hwnd)
+            except OSError:
+                pass
+            self.shell_hwnd = None
         event.accept()
 
 
@@ -578,11 +586,26 @@ def main(smoke=False):
     app.setApplicationName("MediaDownloader")
     app.setOrganizationName("MediaDownloader")
     window = Window()
+    shell_info = {}
+    if sys.platform == "win32" and getattr(sys, "frozen", False) and app.platformName() == "windows":
+        try:
+            window.shell_hwnd = int(window.winId())
+            shell_info = windows_shell.configure_window(window.shell_hwnd, sys.executable)
+        except OSError:
+            window.status.setText("No se pudo registrar el acceso de la barra de tareas. Volvé a abrir el programa.")
     window.show()
     if smoke:
+        if "--shell-report" in sys.argv:
+            import json
+            report_path = Path(sys.argv[sys.argv.index("--shell-report") + 1])
+            report_path.write_text(json.dumps(shell_info), encoding="utf-8")
+            if not shell_info:
+                return 2
         # Real Qt window, multimedia objects and extractor entrypoints must initialize.
         import gallery_dl, yt_dlp
         if not gallery_dl or not yt_dlp or not window.isVisible():
             return 1
         QTimer.singleShot(1200, app.quit)
-    return app.exec()
+    result = app.exec()
+    window.close()
+    return result

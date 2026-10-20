@@ -71,6 +71,7 @@ def main():
         "--name", "MediaDownloaderUpdater", "--icon", str(icon), "updater_entry.py")
     target = ROOT / "dist" / "MediaDownloader"
     shutil.copy2(ROOT / "dist" / "MediaDownloaderUpdater.exe", target)
+    shutil.copy2(icon, target / "MediaDownloader.ico")
     shutil.copy2(ROOT / "LEEME.txt", target)
     shutil.copy2(ROOT / "THIRD_PARTY.md", target)
     # Running the helper from this location automatically relocates it before replacing files.

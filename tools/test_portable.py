@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import struct
+import json
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -36,6 +37,20 @@ def main():
         assert subsystem(exe) == 2, "GUI executable would create a terminal"
         assert subsystem(worker) == 3, "Engine must retain redirected standard streams"
         subprocess.run([str(exe), "--smoke-test"], check=True, timeout=90)
+        # Exercise a real Windows HWND and read back the exact Shell pinning properties.
+        # Offscreen Qt handles cannot test Windows taskbar metadata.
+        shell_report = temp / "shell-properties.json"
+        native_env = os.environ.copy()
+        native_env["QT_QPA_PLATFORM"] = "windows"
+        subprocess.run([str(exe), "--smoke-test", "--shell-report", str(shell_report)],
+                       env=native_env, check=True, timeout=90)
+        shell_properties = json.loads(shell_report.read_text(encoding="utf-8"))
+        assert shell_properties == {
+            "command": subprocess.list2cmdline([str(exe.resolve())]),
+            "icon": str((root / "MediaDownloader.ico").resolve()) + ",0",
+            "name": "MediaDownloader",
+            "id": "Neyen.MediaDownloader.Desktop",
+        }, shell_properties
         for engine in ("gallery-dl", "yt-dlp"):
             result = subprocess.run([str(worker), "--engine", engine, "--version"],
                                     check=True, timeout=45, capture_output=True, text=True,
