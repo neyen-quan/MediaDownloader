@@ -49,6 +49,9 @@ jobs:
           if-no-files-found: error
       - name: Informe de pruebas
         if: always()
+        run: python tools/ci_report.py
+      - name: Conservar informes de pruebas
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pruebas-Windows
