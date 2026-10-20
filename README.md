@@ -3,20 +3,25 @@
 Aplicación independiente para Windows 10/11 x64, con interfaz en español.
 No tiene relación técnica con PhotoBatch. La compresión de imágenes queda fuera de esta versión.
 
-**Estado de entrega:** implementación y pruebas locales disponibles. La compilación
-Windows está automatizada, pero todavía no se ha ejecutado en GitHub: la conexión
-actual devuelve `403 Permission denied` al intentar publicar. **No hay todavía un
-MediaDownloader.exe de Windows validado ni un ZIP portable listo para descargar.**
-Ver [VERIFICACION.md](VERIFICACION.md) para distinguir pruebas realizadas y pendientes.
+**Distribución:** ZIP portable con `MediaDownloader.exe` y sus dependencias,
+generado mediante GitHub Actions. El workflow solo entrega el artefacto después
+de comprobar el arranque del ejecutable, los motores y el actualizador en Windows.
+Ver [VERIFICACION.md](VERIFICACION.md) para los resultados y las pruebas pendientes en una PC.
 
-## Descargar y abrir (cuando termine Actions)
+## Descargar y abrir
 
-1. En GitHub, abrí **Actions → Windows portable → una ejecución exitosa**.
-2. Descargá el artefacto **MediaDownloader-Windows-x64**. GitHub envuelve los
-   artefactos en otro ZIP: adentro está `MediaDownloader-1.0.0-Windows-x64.zip`.
-3. Extraé **todo el ZIP portable** en una carpeta propia. Abrí `MediaDownloader.exe`.
+1. Descargá [MediaDownloader-1.0.0-Windows-x64.zip](https://github.com/neyen-quan/MediaDownloader/releases/download/v1.0.0/MediaDownloader-1.0.0-Windows-x64.zip).
+   Los archivos **Source code** de GitHub son el código fuente, no el programa.
+2. Extraé **todo el ZIP portable** en una carpeta propia. Abrí `MediaDownloader.exe`.
    Conservá `_internal`, FFmpeg y el actualizador junto al ejecutable.
-4. No se necesita instalar Python, FFmpeg ni herramientas de desarrollo.
+3. No se necesita instalar Python, FFmpeg ni herramientas de desarrollo.
+
+[Versión publicada y checksum](https://github.com/neyen-quan/MediaDownloader/releases/tag/v1.0.0)
+· [Compilación y pruebas aprobadas](https://github.com/neyen-quan/MediaDownloader/actions/runs/39501504910).
+
+También está en **Actions → Windows portable → una ejecución exitosa**, artefacto
+**MediaDownloader-Windows-x64**. GitHub envuelve esos artefactos en otro ZIP;
+adentro está el ZIP portable completo y su checksum.
 
 Los tags `v*` publican el mismo artefacto probado en GitHub Releases. La ausencia de
 artefacto o un workflow rojo significa que la compilación no pasó la verificación.
