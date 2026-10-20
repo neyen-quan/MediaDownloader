@@ -1,117 +1,170 @@
-portable	Verificar audio y video con FFmpeg incluido	﻿2026-10-20T21:15:00.5731677Z ##[group]Run $env:PATH = "$pwd\dist\MediaDownloader;$env:PATH"
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5732340Z ^[[36;1m$env:PATH = "$pwd\dist\MediaDownloader;$env:PATH"^[[0m
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5733145Z ^[[36;1m$env:MEDIADOWNLOADER_TEST_EXE = "$pwd\dist\MediaDownloader\MediaDownloader.exe"^[[0m
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5733754Z ^[[36;1mpython -m pytest -q tests/test_media_pipeline.py --junitxml=media-results.xml^[[0m
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5776017Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5776403Z env:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5776614Z   QT_QPA_PLATFORM: offscreen
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5776847Z   PYTHONUTF8: 1
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5777133Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.12.10\x64
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5777588Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.12.10\x64/lib/pkgconfig
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5778036Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5778454Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5778903Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:00.5779219Z ##[endgroup]
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8764618Z .F                                                                       [100%]
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8765278Z ================================== FAILURES ===================================
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8765717Z _________ test_dash_best_video_and_audio_are_muxed_without_reencoding _________
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8766004Z 
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8766420Z tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-1/test_dash_best_video_and_audio0')
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8767145Z monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001F797AA6180>
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8767450Z 
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8767688Z     def test_dash_best_video_and_audio_are_muxed_without_reencoding(tmp_path, monkeypatch):
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8768177Z         executable = os.environ.get("MEDIADOWNLOADER_TEST_EXE")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8768528Z         if executable:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8768840Z             monkeypatch.setattr("mediadownloader.engines.engine_command",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8769310Z                                 lambda engine, args: [executable, "--engine", engine, *args])
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8769751Z         ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8770093Z         if not ffmpeg or not ffprobe:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8771288Z             pytest.skip("FFmpeg no está disponible; la compilación Windows debe ejecutar esta prueba tras instalarlo")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8772051Z         served = tmp_path / "served"; served.mkdir()
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8772665Z         subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8773464Z             "color=c=blue:s=160x90:r=10", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8774194Z             "-t", "1", "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-c:a", "aac",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8774826Z             "-f", "dash", str(served / "manifest.mpd")], check=True, timeout=30)
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8775465Z         class Handler(http.server.SimpleHTTPRequestHandler):
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8776001Z             def log_message(self, *_):
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8776424Z                 pass
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8777146Z         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(served)))
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8778197Z         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8778864Z         monkeypatch.setenv("NO_PROXY", "127.0.0.1")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8779278Z         try:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8779830Z             # Instagram's inline MPD carries absolute media locations; make the fixture equivalent.
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8780616Z             root = ET.fromstring((served / "manifest.mpd").read_text())
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8781174Z             ns = "{urn:mpeg:dash:schema:mpd:2011}"
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8784514Z             base = ET.Element(ns + "BaseURL"); base.text = f"http://127.0.0.1:{server.server_port}/"
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8785268Z             root.insert(0, base)
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8785613Z             item = Media(1, "video", "ytdl:fixture.mp4", "mkv", "instagram-dash",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8786148Z                          "https://instagram.com/reel/test/", manifest=ET.tostring(root, encoding="unicode"))
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8786695Z >           path = fetch(item, tmp_path / "result", threading.Event(), lambda *_: None)
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8787093Z                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8787304Z 
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8787404Z tests\test_media_pipeline.py:56: 
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8787696Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8787927Z 
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8788652Z item = Media(index=1, kind='video', url='ytdl:fixture.mp4', ext='mkv', engine='instagram-dash', source='https://instagram.com...>\n\t\t\t\t</ns0:SegmentTemplate>\n\t\t\t</ns0:Representation>\n\t\t</ns0:AdaptationSet>\n\t</ns0:Period>\n</ns0:MPD>')
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8789876Z folder = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-1/test_dash_best_video_and_audio0/result')
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8790473Z cancel = <threading.Event at 0x1f797aa7140: unset>
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8791006Z progress = <function test_dash_best_video_and_audio_are_muxed_without_reencoding.<locals>.<lambda> at 0x000001F797AC6840>
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8791495Z cookies = ''
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8791609Z 
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8791745Z     def fetch(item, folder, cancel, progress, cookies=""):
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8792073Z         folder.mkdir(parents=True, exist_ok=True)
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8792372Z         if item.engine == "gallery-dl":
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8792631Z             path = folder / item.filename
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8793001Z             direct_download(item.url, path, cancel, progress, cookies, item.source)
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8793395Z             progress(100, "Descarga completa.")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8793662Z             return path
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8794014Z         # A separate process makes extraction, fragment downloads and muxing cancellable.
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8794529Z         args = ["--ignore-config", "--no-warnings", "--newline", "--socket-timeout", "25",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8795015Z                 "--progress-template", "download:MDPROGRESS:%(progress._percent_str)s",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8795449Z                 "--retries", "3", "--fragment-retries", "3", "--no-part",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8795855Z                 "-f", "bv*+ba/b", "--merge-output-format", "mkv", "--remux-video", "mkv",
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8796256Z                 "--write-info-json", "-o", str(folder / "media.%(ext)s")]
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8796556Z         if cookies:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8796758Z             args += ["--cookies", cookies]
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8797013Z         if ffmpeg_location():
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8797278Z             args += ["--ffmpeg-location", ffmpeg_location()]
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8797567Z         if item.selector:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8797822Z             args += ["--match-filter", f"id = '{item.selector}'"]
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8798644Z         progress(0, "Descargando la mejor calidad y el audio…")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8799119Z         # yt-dlp's progress goes to a small file to avoid blocking; parsed while the process runs.
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8799540Z         engine = "yt-dlp"
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8799758Z         command_args = [*args, item.source]
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8800025Z         if item.engine == "instagram-dash":
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8800298Z             request = folder / "dash-request.json"
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8800699Z             request.write_text(json.dumps({"manifest": item.manifest, "folder": str(folder),
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8801220Z                                            "cookies": cookies, "ffmpeg": ffmpeg_location()}), encoding="utf-8")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8802504Z             engine, command_args = "instagram-dash", [str(request)]
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8802932Z         log = folder / "engine.log"
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8803186Z         with log.open("wb") as output:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8803559Z             proc = subprocess.Popen(engine_command(engine, command_args), stdout=output,
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8804000Z                                     stderr=output, creationflags=CREATE_NO_WINDOW,
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8804345Z                                     start_new_session=os.name != "nt")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8804631Z             started = time.monotonic()
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8804854Z             try:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8805049Z                 while proc.poll() is None:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8805304Z                     check_cancel(cancel)
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8805582Z                     if time.monotonic() - started > 3600:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8806086Z                         raise UserError("La descarga superó una hora. Intentá otra vez.")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8806616Z                     # Do not share the writer's file offset: read through a separate descriptor on disk
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8807150Z                     # is not portable for TemporaryFile. Report bytes in output media instead.
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8807648Z                     size = sum(p.stat().st_size for p in folder.glob("media.*") if p.is_file())
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8808035Z                     with log.open("rb") as log_reader:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8808358Z                         log_reader.seek(max(0, log.stat().st_size - 4000))
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8808778Z                         matches = re.findall(rb"MDPROGRESS:\s*([\d.]+)%", log_reader.read())
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8809206Z                     percent = min(99, int(float(matches[-1]))) if matches else 0
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8809820Z                     progress(percent, f"Descargando y combinando sin recompresión: {size / 1048576:.1f} MB…")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8810275Z                     cancel.wait(0.25)
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8810519Z                 if proc.returncode:
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8811149Z >                   raise UserError("No se pudo obtener el video con audio. Volvé a Analizar, cargá una sesión local o actualizá el programa.")
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8812135Z E                   mediadownloader.core.UserError: No se pudo obtener el video con audio. Volvé a Analizar, cargá una sesión local o actualizá el programa.
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8812644Z 
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8812753Z mediadownloader\engines.py:240: UserError
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8813065Z =========================== short test summary info ===========================
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8814199Z FAILED tests/test_media_pipeline.py::test_dash_best_video_and_audio_are_muxed_without_reencoding - mediadownloader.core.UserError: No se pudo obtener el video con audio. Volvé a Analizar, cargá una sesión local o actualizá el programa.
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:02.8815083Z 1 failed, 1 passed in 1.69s
-portable	Verificar audio y video con FFmpeg incluido	2026-10-20T21:15:03.0364120Z ##[error]Process completed with exit code 1.
+SCENARIO absolute
+FILES ['chunk-stream0-00001.m4s', 'chunk-stream1-00001.m4s', 'init-stream0.m4s', 'init-stream1.m4s', 'manifest.mpd']
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="urn:mpeg:dash:schema:mpd:2011"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
+	profiles="urn:mpeg:dash:profile:isoff-live:2011"
+	type="static"
+	mediaPresentationDuration="PT1.0S"
+	maxSegmentDuration="PT5.0S"
+	minBufferTime="PT2.0S">
+	<ProgramInformation>
+	</ProgramInformation>
+	<ServiceDescription id="0">
+	</ServiceDescription>
+	<Period id="0" start="PT0.0S">
+		<AdaptationSet id="0" contentType="video" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" frameRate="10/1" maxWidth="160" maxHeight="90" par="16:9">
+			<Representation id="0" mimeType="video/mp4" codecs="avc1.64000a" bandwidth="15744" width="160" height="90" sar="1:1">
+				<SegmentTemplate timescale="10240" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+					<SegmentTimeline>
+						<S t="0" d="10240" />
+					</SegmentTimeline>
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet id="1" contentType="audio" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true">
+			<Representation id="1" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="69000" audioSamplingRate="44100">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+				<SegmentTemplate timescale="44100" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+					<SegmentTimeline>
+						<S t="0" d="44100" />
+					</SegmentTimeline>
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+	</Period>
+</MPD>
+
+HTTP "GET /init-stream0.m4s HTTP/1.1" 200 -
+HTTP "GET /chunk-stream0-00001.m4s HTTP/1.1" 200 -
+HTTP "GET /init-stream1.m4s HTTP/1.1" 200 -
+HTTP "GET /chunk-stream1-00001.m4s HTTP/1.1" 200 -
+RESULT PASS 11150
+[info] instagram: Downloading 1 format(s): dash-0+dash-1
+[info] Writing video metadata as JSON to: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.info.json
+[dashsegments] Total fragments: 2
+[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.fdash-0.mp4
+
+[download]  50.0% of ~   1.59KiB at    1.39KiB/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
+
+[download]  25.0% of ~   3.18KiB at    1.39KiB/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
+
+[download]  93.4% of ~   1.92KiB at    1.39KiB/s ETA Unknown (frag 1/2)MDPROGRESS:93.4%
+
+[download]  65.8% of ~   2.92KiB at    1.39KiB/s ETA Unknown (frag 1/2)MDPROGRESS:65.8%
+
+[download]  63.0% of ~   3.05KiB at    1.39KiB/s ETA Unknown (frag 2/2)MDPROGRESS:63.0%
+
+[download] 100% of    1.92KiB in 00:00:00 at 10.25KiB/s                MDPROGRESS:100.0%
+
+[dashsegments] Total fragments: 2
+[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.fdash-1.m4a
+
+[download]  50.0% of ~   1.49KiB at      0.00B/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
+
+[download]  25.0% of ~   2.98KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
+
+[download]  17.4% of ~  10.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:17.4%
+
+[download]  33.9% of ~  11.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:33.9%
+
+[download]  59.3% of ~  13.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:59.3%
+
+[download]  59.0% of ~  17.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:59.0%
+
+[download]  51.9% of ~  19.38KiB at      0.00B/s ETA Unknown (frag 2/2)MDPROGRESS:51.9%
+
+[download] 100% of   10.06KiB in 00:00:00 at 321.96KiB/s               MDPROGRESS:100.0%
+
+[Merger] Merging formats into "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.mkv"
+Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.fdash-0.mp4 (pass -k to keep)
+Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.fdash-1.m4a (pass -k to keep)
+[VideoRemuxer] Not remuxing media file "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.mkv"; already is in target format mkv
+
+SCENARIO relative
+FILES ['chunk-stream0-00001.m4s', 'chunk-stream1-00001.m4s', 'init-stream0.m4s', 'init-stream1.m4s', 'manifest.mpd']
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="urn:mpeg:dash:schema:mpd:2011"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
+	profiles="urn:mpeg:dash:profile:isoff-live:2011"
+	type="static"
+	mediaPresentationDuration="PT1.0S"
+	maxSegmentDuration="PT5.0S"
+	minBufferTime="PT2.0S">
+	<ProgramInformation>
+	</ProgramInformation>
+	<ServiceDescription id="0">
+	</ServiceDescription>
+	<Period id="0" start="PT0.0S">
+		<AdaptationSet id="0" contentType="video" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" frameRate="10/1" maxWidth="160" maxHeight="90" par="16:9">
+			<Representation id="0" mimeType="video/mp4" codecs="avc1.64000a" bandwidth="15744" width="160" height="90" sar="1:1">
+				<SegmentTemplate timescale="10240" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+					<SegmentTimeline>
+						<S t="0" d="10240" />
+					</SegmentTimeline>
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet id="1" contentType="audio" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true">
+			<Representation id="1" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="69000" audioSamplingRate="44100">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+				<SegmentTemplate timescale="44100" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+					<SegmentTimeline>
+						<S t="0" d="44100" />
+					</SegmentTimeline>
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+	</Period>
+</MPD>
+
+HTTP "GET /init-stream0.m4s HTTP/1.1" 200 -
+HTTP "GET /chunk-stream0-00001.m4s HTTP/1.1" 200 -
+HTTP "GET /init-stream1.m4s HTTP/1.1" 200 -
+HTTP "GET /chunk-stream1-00001.m4s HTTP/1.1" 200 -
+RESULT PASS 11150
+[info] instagram: Downloading 1 format(s): dash-0+dash-1
+[info] Writing video metadata as JSON to: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.info.json
+[dashsegments] Total fragments: 2
+[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.fdash-0.mp4
+
+[download]  50.0% of ~   1.59KiB at    1.53KiB/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
+
+[download]  25.0% of ~   3.18KiB at    1.53KiB/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
+
+[download]  93.4% of ~   1.92KiB at    1.53KiB/s ETA Unknown (frag 1/2)MDPROGRESS:93.4%
+
+[download]  65.8% of ~   2.92KiB at    1.53KiB/s ETA Unknown (frag 1/2)MDPROGRESS:65.8%
+
+[download]  63.0% of ~   3.05KiB at    1.53KiB/s ETA Unknown (frag 2/2)MDPROGRESS:63.0%
+
+[download] 100% of    1.92KiB in 00:00:00 at 11.18KiB/s                MDPROGRESS:100.0%
+
+[dashsegments] Total fragments: 2
+[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.fdash-1.m4a
+
+[download]  50.0% of ~   1.49KiB at      0.00B/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
+
+[download]  25.0% of ~   2.98KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
+
+[download]  17.4% of ~  10.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:17.4%
+
+[download]  33.9% of ~  11.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:33.9%
+
+[download]  59.3% of ~  13.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:59.3%
+
+[download]  59.0% of ~  17.06KiB at      0.00B/s ETA Unknown (frag 1/2)MDPROGRESS:59.0%
+
+[download]  51.9% of ~  19.38KiB at      0.00B/s ETA Unknown (frag 2/2)MDPROGRESS:51.9%
+
+[download] 100% of   10.06KiB in 00:00:00 at 322.06KiB/s               MDPROGRESS:100.0%
+
+[Merger] Merging formats into "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.mkv"
+Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.fdash-1.m4a (pass -k to keep)
+Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.fdash-0.mp4 (pass -k to keep)
+[VideoRemuxer] Not remuxing media file "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.mkv"; already is in target format mkv
+
