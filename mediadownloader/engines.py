@@ -21,6 +21,11 @@ CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 def engine_command(engine, args):
     if getattr(sys, "frozen", False):
+        worker = Path(sys.executable).with_name("MediaDownloaderEngine.exe")
+        if os.name == "nt":
+            if not worker.is_file():
+                raise UserError("Falta el motor de descarga. Extraé nuevamente el ZIP portable completo.")
+            return [str(worker), "--engine", engine, *args]
         return [sys.executable, "--engine", engine, *args]
     if engine == "instagram-dash":
         return [sys.executable, str(Path(__file__).resolve().parents[1] / "main.py"), "--engine", engine, *args]

@@ -62,14 +62,11 @@ def get_ffmpeg():
 def main():
     if sys.platform != "win32":
         raise SystemExit("El portable Windows debe compilarse en Windows, no se renombra un binario Linux.")
-    # A console subsystem plus hide-early retains working stdout for isolated engine processes.
-    icon = make_icon(ROOT / "build" / "branding" / "MediaDownloader.ico")
-    run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--console",
-        "--hide-console", "hide-early", "--name", "MediaDownloader",
-        "--icon", str(icon),
-        "--collect-all", "gallery_dl", "--collect-all", "yt_dlp",
-        "--exclude-module", "PySide6.QtWebEngineCore", "--exclude-module", "PySide6.QtWebEngineWidgets",
-        "--exclude-module", "PySide6.QtPdf", "main.py")
+    # The GUI uses the Windows GUI subsystem: no terminal is allocated at startup.
+    # Workers keep redirected standard streams and are launched with CREATE_NO_WINDOW.
+    make_icon(ROOT / "build" / "branding" / "MediaDownloader.ico")
+    run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "MediaDownloader.spec")
+    icon = ROOT / "build" / "branding" / "MediaDownloader.ico"
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--windowed",
         "--name", "MediaDownloaderUpdater", "--icon", str(icon), "updater_entry.py")
     target = ROOT / "dist" / "MediaDownloader"

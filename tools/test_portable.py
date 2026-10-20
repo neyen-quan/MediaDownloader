@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import struct
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -21,10 +22,24 @@ def main():
         root = temp / "MediaDownloader"
         manifest = extract_package(archive, root)
         exe = root / "MediaDownloader.exe"
+        # PE subsystem 2 (Windows GUI) cannot allocate a startup console.
+        # Subsystem 3 is reserved for the engine, always launched with CREATE_NO_WINDOW.
+        def subsystem(path):
+            with path.open("rb") as source:
+                source.seek(0x3c)
+                pe_offset = struct.unpack("<I", source.read(4))[0]
+                source.seek(pe_offset)
+                assert source.read(4) == b"PE\x00\x00"
+                source.seek(pe_offset + 24 + 68)
+                return struct.unpack("<H", source.read(2))[0]
+        worker = root / "MediaDownloaderEngine.exe"
+        assert subsystem(exe) == 2, "GUI executable would create a terminal"
+        assert subsystem(worker) == 3, "Engine must retain redirected standard streams"
         subprocess.run([str(exe), "--smoke-test"], check=True, timeout=90)
         for engine in ("gallery-dl", "yt-dlp"):
-            result = subprocess.run([str(exe), "--engine", engine, "--version"],
-                                    check=True, timeout=45, capture_output=True, text=True)
+            result = subprocess.run([str(worker), "--engine", engine, "--version"],
+                                    check=True, timeout=45, capture_output=True, text=True,
+                                    creationflags=subprocess.CREATE_NO_WINDOW)
             assert result.stdout.strip(), f"Frozen engine {engine} did not execute"
         # The previous process must release its EXE/DLL handles before a Windows update can swap directories.
         parent = subprocess.Popen([str(exe), "--smoke-test"])

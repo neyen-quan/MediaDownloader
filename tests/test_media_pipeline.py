@@ -31,7 +31,7 @@ def test_dash_best_video_and_audio_are_muxed_without_reencoding(tmp_path, monkey
     executable = os.environ.get("MEDIADOWNLOADER_TEST_EXE")
     if executable:
         monkeypatch.setattr("mediadownloader.engines.engine_command",
-                            lambda engine, args: [executable, "--engine", engine, *args])
+                            lambda engine, args: [str(Path(executable).with_name("MediaDownloaderEngine.exe")), "--engine", engine, *args])
     ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
         pytest.skip("FFmpeg no está disponible; la compilación Windows debe ejecutar esta prueba tras instalarlo")
