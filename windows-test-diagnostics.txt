@@ -43,24 +43,24 @@ HTTP "GET /init-stream1.m4s HTTP/1.1" 200 -
 HTTP "GET /chunk-stream1-00001.m4s HTTP/1.1" 200 -
 RESULT PASS 11150
 [info] instagram: Downloading 1 format(s): dash-0+dash-1
-[info] Writing video metadata as JSON to: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.info.json
+[info] Writing video metadata as JSON to: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.info.json
 [dashsegments] Total fragments: 2
-[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.fdash-0.mp4
+[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.fdash-0.mp4
 
-[download]  50.0% of ~   1.59KiB at    1.39KiB/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
+[download]  50.0% of ~   1.59KiB at    1.91KiB/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
 
-[download]  25.0% of ~   3.18KiB at    1.39KiB/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
+[download]  25.0% of ~   3.18KiB at    1.91KiB/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
 
-[download]  93.4% of ~   1.92KiB at    1.39KiB/s ETA Unknown (frag 1/2)MDPROGRESS:93.4%
+[download]  93.4% of ~   1.92KiB at    1.91KiB/s ETA Unknown (frag 1/2)MDPROGRESS:93.4%
 
-[download]  65.8% of ~   2.92KiB at    1.39KiB/s ETA Unknown (frag 1/2)MDPROGRESS:65.8%
+[download]  65.8% of ~   2.92KiB at    1.91KiB/s ETA Unknown (frag 1/2)MDPROGRESS:65.8%
 
-[download]  63.0% of ~   3.05KiB at    1.39KiB/s ETA Unknown (frag 2/2)MDPROGRESS:63.0%
+[download]  63.0% of ~   3.05KiB at    1.91KiB/s ETA Unknown (frag 2/2)MDPROGRESS:63.0%
 
-[download] 100% of    1.92KiB in 00:00:00 at 10.25KiB/s                MDPROGRESS:100.0%
+[download] 100% of    1.92KiB in 00:00:00 at 15.37KiB/s                MDPROGRESS:100.0%
 
 [dashsegments] Total fragments: 2
-[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.fdash-1.m4a
+[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.fdash-1.m4a
 
 [download]  50.0% of ~   1.49KiB at      0.00B/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
 
@@ -76,12 +76,12 @@ RESULT PASS 11150
 
 [download]  51.9% of ~  19.38KiB at      0.00B/s ETA Unknown (frag 2/2)MDPROGRESS:51.9%
 
-[download] 100% of   10.06KiB in 00:00:00 at 321.96KiB/s               MDPROGRESS:100.0%
+[download] 100% of   10.06KiB in 00:00:00 at 321.77KiB/s               MDPROGRESS:100.0%
 
-[Merger] Merging formats into "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.mkv"
-Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.fdash-0.mp4 (pass -k to keep)
-Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.fdash-1.m4a (pass -k to keep)
-[VideoRemuxer] Not remuxing media file "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\absolute\result\media.mkv"; already is in target format mkv
+[Merger] Merging formats into "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.mkv"
+Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.fdash-1.m4a (pass -k to keep)
+Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.fdash-0.mp4 (pass -k to keep)
+[VideoRemuxer] Not remuxing media file "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\absolute\result\media.mkv"; already is in target format mkv
 
 SCENARIO relative
 FILES ['chunk-stream0-00001.m4s', 'chunk-stream1-00001.m4s', 'init-stream0.m4s', 'init-stream1.m4s', 'manifest.mpd']
@@ -128,24 +128,24 @@ HTTP "GET /init-stream1.m4s HTTP/1.1" 200 -
 HTTP "GET /chunk-stream1-00001.m4s HTTP/1.1" 200 -
 RESULT PASS 11150
 [info] instagram: Downloading 1 format(s): dash-0+dash-1
-[info] Writing video metadata as JSON to: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.info.json
+[info] Writing video metadata as JSON to: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.info.json
 [dashsegments] Total fragments: 2
-[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.fdash-0.mp4
+[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.fdash-0.mp4
 
-[download]  50.0% of ~   1.59KiB at    1.53KiB/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
+[download]  50.0% of ~   1.59KiB at    2.19KiB/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
 
-[download]  25.0% of ~   3.18KiB at    1.53KiB/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
+[download]  25.0% of ~   3.18KiB at    2.19KiB/s ETA Unknown (frag 1/2)MDPROGRESS:25.0%
 
-[download]  93.4% of ~   1.92KiB at    1.53KiB/s ETA Unknown (frag 1/2)MDPROGRESS:93.4%
+[download]  93.4% of ~   1.92KiB at    2.19KiB/s ETA Unknown (frag 1/2)MDPROGRESS:93.4%
 
-[download]  65.8% of ~   2.92KiB at    1.53KiB/s ETA Unknown (frag 1/2)MDPROGRESS:65.8%
+[download]  65.8% of ~   2.92KiB at    2.19KiB/s ETA Unknown (frag 1/2)MDPROGRESS:65.8%
 
-[download]  63.0% of ~   3.05KiB at    1.53KiB/s ETA Unknown (frag 2/2)MDPROGRESS:63.0%
+[download]  63.0% of ~   3.05KiB at    2.53KiB/s ETA Unknown (frag 2/2)MDPROGRESS:63.0%
 
-[download] 100% of    1.92KiB in 00:00:00 at 11.18KiB/s                MDPROGRESS:100.0%
+[download] 100% of    1.92KiB in 00:00:00 at 3.30KiB/s                 MDPROGRESS:100.0%
 
 [dashsegments] Total fragments: 2
-[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.fdash-1.m4a
+[download] Destination: C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.fdash-1.m4a
 
 [download]  50.0% of ~   1.49KiB at      0.00B/s ETA Unknown (frag 0/2)MDPROGRESS:50.0%
 
@@ -161,10 +161,10 @@ RESULT PASS 11150
 
 [download]  51.9% of ~  19.38KiB at      0.00B/s ETA Unknown (frag 2/2)MDPROGRESS:51.9%
 
-[download] 100% of   10.06KiB in 00:00:00 at 322.06KiB/s               MDPROGRESS:100.0%
+[download] 100% of   10.06KiB in 00:00:00 at 322.02KiB/s               MDPROGRESS:100.0%
 
-[Merger] Merging formats into "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.mkv"
-Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.fdash-1.m4a (pass -k to keep)
-Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.fdash-0.mp4 (pass -k to keep)
-[VideoRemuxer] Not remuxing media file "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-1k1mr7ao\relative\result\media.mkv"; already is in target format mkv
+[Merger] Merging formats into "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.mkv"
+Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.fdash-1.m4a (pass -k to keep)
+Deleting original file C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.fdash-0.mp4 (pass -k to keep)
+[VideoRemuxer] Not remuxing media file "C:\Users\RUNNER~1\AppData\Local\Temp\MediaDownloader-DASH-probe-lvzxp9fa\relative\result\media.mkv"; already is in target format mkv
 
