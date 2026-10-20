@@ -1,5 +1,6 @@
 """Exercise yt-dlp + real FFmpeg muxing against a local DASH fixture, without platform access."""
 import functools
+import hashlib
 import http.server
 import json
 import os
@@ -38,7 +39,8 @@ def test_dash_best_video_and_audio_are_muxed_without_reencoding(tmp_path, monkey
     subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
         "color=c=blue:s=160x90:r=10", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
         "-t", "1", "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-c:a", "aac",
-        "-f", "dash", str(served / "manifest.mpd")], check=True, timeout=30)
+        # Windows FFmpeg resolves fragment templates from cwd, even with an absolute MPD path.
+        "-f", "dash", "manifest.mpd"], cwd=served, check=True, timeout=30)
     class Handler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, *_):
             pass
@@ -72,12 +74,14 @@ def test_dash_best_video_and_audio_are_muxed_without_reencoding(tmp_path, monkey
         assert {s["codec_type"] for s in streams} == {"video", "audio"}
         assert {s["codec_name"] for s in streams} == {"h264", "aac"}
         assert next(s for s in streams if s["codec_type"] == "video")["width"] == 160
-        # Compare compressed elementary streams by FFmpeg stream hash (no decoder involved).
+        # Canonical elementary streams avoid hashing MP4/MKV packet framing as video data.
+        # Both exports use stream copy: no decoder or encoder participates in the comparison.
         def stream_hash(path, selector):
-            result = subprocess.run([ffmpeg, "-v", "error", "-i", str(path), "-map", selector,
-                "-c", "copy", "-f", "streamhash", "-hash", "sha256", "-"],
-                check=True, capture_output=True, text=True, timeout=20)
-            return result.stdout.strip().split("=")[-1]
+            options = ["-bsf:v", "h264_mp4toannexb", "-f", "h264"] if ":v:" in selector else ["-f", "adts"]
+            result = subprocess.run([ffmpeg, "-v", "error", "-i", path.name, "-map", selector,
+                "-c", "copy", *options, "-"], cwd=path.parent,
+                check=True, capture_output=True, timeout=20)
+            return hashlib.sha256(result.stdout).hexdigest()
         assert stream_hash(served / "manifest.mpd", "0:v:0") == stream_hash(path, "0:v:0")
         assert stream_hash(served / "manifest.mpd", "0:a:0") == stream_hash(path, "0:a:0")
     finally:

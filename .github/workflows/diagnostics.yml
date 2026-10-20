@@ -16,14 +16,12 @@ jobs:
           python-version: '3.12'
       - name: Prepare the controlled DASH probe
         run: |
-          python -m pip install requests==2.34.2 yt-dlp==2026.8.19 pyinstaller==6.22.3 pytest==9.1.1
+          python -m pip install requests==2.34.2 yt-dlp==2026.8.19 pytest==9.1.1
           python -c "from tools.build_windows import get_ffmpeg; get_ffmpeg()"
-          python -m PyInstaller --noconfirm --onedir --console --hide-console hide-early --name MediaDownloaderProbe --collect-all yt_dlp --exclude-module mediadownloader.gui main.py
       - name: Compare Windows DASH fixture paths
         shell: pwsh
         run: |
           $env:PATH = "$pwd\dist\MediaDownloader;$env:PATH"
-          $env:MEDIADOWNLOADER_TEST_EXE = "$pwd\dist\MediaDownloaderProbe\MediaDownloaderProbe.exe"
           python -m pytest -q tests/test_media_pipeline.py > windows-test-diagnostics.txt 2>&1
       - name: Preserve diagnostics on this separate branch
         if: always()
