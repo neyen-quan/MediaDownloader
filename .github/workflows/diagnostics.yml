@@ -1,0 +1,24 @@
+name: Retrieve Windows diagnostics
+on:
+  push:
+    branches: [ci/windows-diagnostics]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve failed controlled test output
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run view 39498197646 --repo "$GITHUB_REPOSITORY" --log-failed > windows-test-diagnostics.txt
+      - name: Preserve diagnostics on this separate branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add windows-test-diagnostics.txt
+          git commit -m 'Capture Windows multimedia test failure'
+          git push origin HEAD:refs/heads/ci/windows-diagnostics
