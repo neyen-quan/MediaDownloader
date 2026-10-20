@@ -12,6 +12,10 @@ import xml.etree.ElementTree as ET
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from mediadownloader.core import Media
 from mediadownloader.engines import fetch
+from mediadownloader import engines
+
+if executable := os.environ.get("MEDIADOWNLOADER_TEST_EXE"):
+    engines.engine_command = lambda engine, args: [executable, "--engine", engine, *args]
 
 os.environ["NO_PROXY"] = "127.0.0.1"
 with tempfile.TemporaryDirectory(prefix="MediaDownloader-DASH-probe-") as temp:
