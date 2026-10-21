@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import uuid
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer, QSize
@@ -19,6 +20,7 @@ from PySide6.QtMultimediaWidgets import QVideoWidget
 from . import __version__
 from .core import Settings, UserError, Cancelled, data_dir, save_selection
 from .appearance import STYLE, app_icon
+from .image_preview import ImagePreview
 from . import windows_shell
 from . import engines
 from .updater import validate_package, locations
@@ -59,6 +61,10 @@ class Window(QMainWindow):
         self.items = []
         self.cache = tempfile.TemporaryDirectory(prefix="MediaDownloader-preview-")
         self.previews = {}
+        self.thumbnails = {}
+        self.preview_task = None
+        self.preview_generation = 0
+        self.preview_failures = set()
         self.pending_close = False
         self.shell_hwnd = None
         self.pixmap = None
@@ -117,7 +123,7 @@ class Window(QMainWindow):
         outer.addWidget(header)
 
         content = QWidget()
-        content.setMinimumHeight(800)
+        content.setMinimumHeight(720)
         layout = QVBoxLayout(content)
         layout.setContentsMargins(30, 20, 30, 14)
         layout.setSpacing(16)
@@ -160,20 +166,22 @@ class Window(QMainWindow):
 
         split = QSplitter(Qt.Orientation.Horizontal)
         split.setChildrenCollapsible(False)
+        split.setMinimumHeight(420)
+        split.setMaximumHeight(480)
         left, column = card()
-        left.setMinimumWidth(300)
+        left.setMinimumWidth(275)
         row = QHBoxLayout()
         row.addWidget(label("02 / CONTENIDO", "eyebrow"))
         row.addStretch()
         self.count_label = label("0 elementos", "badge")
         row.addWidget(self.count_label)
         column.addLayout(row)
-        column.addWidget(label("Elegí qué guardar", "sectionTitle"))
-        order_hint = label("El orden original se mantiene en tus archivos.")
-        order_hint.setWordWrap(True)
-        column.addWidget(order_hint)
+        selection_title = label("Elegí qué guardar", "sectionTitle")
+        selection_title.setStyleSheet("font-size: 17px;")
+        selection_title.setToolTip("El orden original se mantiene en tus archivos.")
+        column.addWidget(selection_title)
         self.list = QListWidget()
-        self.list.setIconSize(QSize(60, 60))
+        self.list.setIconSize(QSize(32, 32))
         self.list.currentRowChanged.connect(self.show_current)
         self.list.itemChanged.connect(self.update_selection_label)
         self.list_stack = QStackedWidget()
@@ -218,7 +226,7 @@ class Window(QMainWindow):
         self.details.setMaximumHeight(64)
         column.addWidget(self.details)
         self.stack = QStackedWidget()
-        self.image = QLabel("Tu contenido, en primer plano.\n\nAnalizá un enlace para ver la previsualización.")
+        self.image = ImagePreview("Tu contenido, en primer plano.\n\nAnalizá un enlace para ver la previsualización.")
         self.image.setObjectName("previewSurface")
         self.image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image.setMinimumSize(300, 180)
@@ -233,9 +241,26 @@ class Window(QMainWindow):
         self.player.setVideoOutput(self.video)
         self.player.errorOccurred.connect(lambda *_: self.status.setText("No se pudo reproducir este códec. Podés guardar el archivo original sin recompresión."))
         row = QHBoxLayout()
-        self.preview_button = button("Cargar previsualización", self.preview, "quiet")
+        self.preview_button = button("Reintentar", self.preview, "quiet")
+        self.preview_button.hide()
+        self.zoom = QSlider(Qt.Orientation.Horizontal)
+        self.zoom.setRange(25, 200)
+        self.zoom.setValue(80)
+        self.zoom.setToolTip("100% ajusta la imagen al panel. Arrastrá la foto para moverla al ampliar.")
+        self.zoom_label = label("80%")
+        self.zoom.valueChanged.connect(self.change_zoom)
+        self.zoom_controls = QWidget()
+        zoom_row = QHBoxLayout(self.zoom_controls)
+        zoom_row.setContentsMargins(0, 0, 0, 0)
+        zoom_row.addWidget(label("Zoom"))
+        zoom_row.addWidget(self.zoom, 1)
+        zoom_row.addWidget(self.zoom_label)
+        zoom_row.addWidget(button("Ajustar", lambda: self.zoom.setValue(100), "quiet"))
+        column.addWidget(self.zoom_controls)
         self.play_button = button("▶ / Pausa", self.toggle_play, "quiet")
+        self.play_button.hide()
         self.seek = QSlider(Qt.Orientation.Horizontal)
+        self.seek.hide()
         self.seek.sliderMoved.connect(self.player.setPosition)
         self.player.positionChanged.connect(self.seek.setValue)
         self.player.durationChanged.connect(lambda duration: self.seek.setRange(0, duration))
@@ -244,9 +269,9 @@ class Window(QMainWindow):
         row.addWidget(self.seek, 1)
         column.addLayout(row)
         split.addWidget(right)
-        split.setSizes([390, 790])
-        split.setStretchFactor(0, 1)
-        split.setStretchFactor(1, 2)
+        split.setSizes([300, 880])
+        split.setStretchFactor(0, 0)
+        split.setStretchFactor(1, 1)
         layout.addWidget(split, 1)
 
         downloads, download_box = card()
@@ -320,6 +345,8 @@ class Window(QMainWindow):
     def start(self, action, done):
         if self.task:
             return
+        if self.preview_task:
+            self.preview_task.cancel.set()
         self.refresh_controls(True)
         self.progress.setValue(0)
         self.task = Task(action, self)
@@ -344,6 +371,8 @@ class Window(QMainWindow):
         self.refresh_controls(False)
         if self.pending_close:
             self.close()
+        else:
+            self.queue_preview()
 
     def cancel(self):
         if self.task:
@@ -370,7 +399,10 @@ class Window(QMainWindow):
     def analyzed(self, items):
         self.player.stop(); self.player.setSource(QUrl())
         self.items = items
+        self.preview_generation += 1
         self.previews = {}
+        self.thumbnails = {}
+        self.preview_failures = set()
         self.list.clear()
         for item in items:
             row = QListWidgetItem(f"{item.index:03d} · {'Video' if item.kind == 'video' else 'Foto'}")
@@ -380,9 +412,9 @@ class Window(QMainWindow):
         self.list_stack.setCurrentIndex(1 if items else 0)
         self.update_selection_label()
         self.list.setCurrentRow(0)
-        self.report(100, f"{len(items)} elemento(s) encontrados. Elegí uno para previsualizarlo.")
-        # Run preview after extraction's QThread has finished and released the busy state.
-        QTimer.singleShot(100, self.preview)
+        self.report(100, f"{len(items)} elemento(s) encontrados. Las previsualizaciones se cargan automáticamente.")
+        self.refresh_controls(bool(self.task))
+        QTimer.singleShot(0, self.queue_preview)
 
     def mark(self, selected):
         for i in range(self.list.count()):
@@ -392,9 +424,15 @@ class Window(QMainWindow):
         self.player.stop(); self.player.setSource(QUrl())
         self.stack.setCurrentIndex(0)
         self.pixmap = None
+        self.image.set_image(None)
+        self.image.setText("")
+        self.preview_button.hide()
         if not 0 <= index < len(self.items):
             return
         item = self.items[index]
+        self.zoom_controls.setVisible(item.kind != "video")
+        self.play_button.setVisible(item.kind == "video")
+        self.seek.setVisible(item.kind == "video")
         self.details.setText(f"Elemento {item.index} de {len(self.items)} · {item.kind}\n{item.title[:150]}")
         path = self.previews.get(item.index)
         if path and path.exists():
@@ -405,40 +443,89 @@ class Window(QMainWindow):
                 self.pixmap = QPixmap(str(path))
                 self.scale_image()
         else:
-            self.image.setPixmap(QPixmap())
-            self.image.setText("Tocá ‘Cargar previsualización’.\nLos videos se cargan con audio y pueden tardar.")
+            failed = (item.index, "full") in self.preview_failures
+            self.image.setText("No se pudo cargar la previsualización. Podés reintentar." if failed
+                               else "Cargando previsualización…" + ("\nEl video con audio puede tardar." if item.kind == "video" else ""))
+            self.preview_button.setVisible(failed)
+        QTimer.singleShot(0, self.queue_preview)
 
     def scale_image(self):
         if self.pixmap and not self.pixmap.isNull():
-            self.image.setPixmap(self.pixmap.scaled(self.image.size(), Qt.AspectRatioMode.KeepAspectRatio,
-                                                   Qt.TransformationMode.SmoothTransformation))
+            self.image.set_image(self.pixmap)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if hasattr(self, "pixmap"):
-            self.scale_image()
+    def change_zoom(self, value):
+        self.zoom_label.setText(f"{value}%")
+        self.image.set_zoom(value)
 
     def preview(self):
         index = self.list.currentRow()
-        if self.task or not 0 <= index < len(self.items):
+        if not 0 <= index < len(self.items):
             return
-        item = self.items[index]
-        if item.index in self.previews:
-            self.show_current(index)
+        self.preview_failures.discard((self.items[index].index, "full"))
+        self.show_current(index)
+
+    def queue_preview(self):
+        # Independent background queue: selecting/checking/saving stays responsive.
+        # New selections take priority when the current request completes.
+        if self.task or self.preview_task or self.pending_close or not self.items:
             return
+        current = self.list.currentRow()
+        candidates = []
+        if 0 <= current < len(self.items):
+            candidates.append((self.items[current], "full"))
+        candidates.extend((item, "full" if item.kind != "video" else "thumb") for item in self.items)
+        for item, kind in candidates:
+            cached = self.previews if kind == "full" else self.thumbnails
+            if item.index not in cached and (item.index, kind) not in self.preview_failures:
+                if kind == "thumb" and not item.thumbnail:
+                    continue
+                break
+        else:
+            return
+        generation = self.preview_generation
         cookies = self.settings.cookies
-        folder = Path(self.cache.name) / str(len(list(Path(self.cache.name).iterdir())))
+        folder = Path(self.cache.name) / uuid.uuid4().hex
+        def action(cancel, progress):
+            if kind == "full":
+                return engines.fetch(item, folder, cancel, progress, cookies)
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / "thumbnail.jpg"
+            engines.direct_download(item.thumbnail, path, cancel, progress, cookies, item.source)
+            return path
         def done(path):
-            self.previews[item.index] = path
-            if item.kind != "video":
-                self.list.item(index).setIcon(QIcon(str(path)))
-            self.show_current(index)
-            if item.kind != "video" and (not self.pixmap or self.pixmap.isNull()):
-                self.image.setText("Este formato no se puede previsualizar en esta PC.\nPodés guardar el archivo original.")
-                self.report(100, "Archivo recibido; formato de imagen no compatible con la previsualización de esta PC.")
-            else:
-                self.report(100, "Previsualización lista. El original se guarda sin recomprimir.")
-        self.start(lambda cancel, progress: engines.fetch(item, folder, cancel, progress, cookies), done)
+            if generation != self.preview_generation or self.pending_close:
+                return
+            (self.previews if kind == "full" else self.thumbnails)[item.index] = path
+            index = self.items.index(item)
+            if kind == "thumb" or item.kind != "video":
+                pixmap = QPixmap(str(path))
+                if not pixmap.isNull():
+                    self.list.item(index).setIcon(QIcon(pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio,
+                                                                    Qt.TransformationMode.SmoothTransformation)))
+            if kind == "full" and index == self.list.currentRow():
+                self.show_current(index)
+                if item.kind != "video" and (not self.pixmap or self.pixmap.isNull()):
+                    self.image.setText("Este formato no se puede previsualizar en esta PC.\nPodés guardar el archivo original.")
+        def error(message):
+            if generation != self.preview_generation or task.cancel.is_set():
+                return
+            self.preview_failures.add((item.index, kind))
+            if kind == "full" and self.items[self.list.currentRow()] is item:
+                self.show_current(self.list.currentRow())
+                self.status.setText(message)
+        task = self.preview_task = Task(action, self)
+        task.result.connect(done)
+        task.error.connect(error)
+        task.finished.connect(self.preview_finished)
+        task.start()
+
+    def preview_finished(self):
+        old, self.preview_task = self.preview_task, None
+        old.deleteLater()
+        if self.pending_close:
+            self.close()
+        else:
+            self.queue_preview()
 
     def toggle_play(self):
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -557,9 +644,11 @@ class Window(QMainWindow):
             self.failed("No se pudo iniciar el actualizador. Usá una carpeta con permisos de escritura y espacio libre.")
 
     def closeEvent(self, event):
-        if self.task:
+        if self.task or self.preview_task:
             self.pending_close = True
             self.cancel()
+            if self.preview_task:
+                self.preview_task.cancel.set()
             event.ignore()
             return
         self.player.stop(); self.player.setSource(QUrl())
