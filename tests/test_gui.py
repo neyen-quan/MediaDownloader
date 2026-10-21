@@ -162,3 +162,28 @@ def test_closing_cancels_preview_before_cleaning_cache(tmp_path, monkeypatch):
     window.close()
     wait(app, lambda: not window.isVisible())
     assert window.preview_task is None and not os.path.exists(cache)
+
+
+def test_compact_toolbar_and_portrait_preview_use_window_height(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "profile"))
+    app = QApplication.instance() or QApplication([])
+    window = Window(); window.resize(1280, 900); window.show()
+    for _ in range(5):
+        app.processEvents()
+    assert window.url.mapTo(window, window.url.rect().topLeft()).y() == window.folder.mapTo(window, window.folder.rect().topLeft()).y()
+    assert window.url.mapTo(window, window.url.rect().topLeft()).y() < 110
+    assert window.content_split.height() > 480
+    assert window.image.height() > 400
+    assert abs(window.stack.width() / window.stack.height() - 3 / 4) < 0.01
+    before = window.content_split.size()
+    window.portrait.set_ratio(9 / 16)
+    app.processEvents()
+    assert abs(window.stack.width() / window.stack.height() - 9 / 16) < 0.01
+    assert window.content_split.size() == before
+    window.resize(980, 760)
+    for _ in range(5):
+        app.processEvents()
+    assert window.url.width() >= 130 and window.folder.width() >= 130
+    assert window.stack.width() <= window.portrait.width()
+    assert window.stack.height() <= window.portrait.height()
+    window.close()

@@ -5,6 +5,23 @@ from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QLinearGradient, QIcon, QPixmap
 
 
+def checkbox_image():
+    image = QImage(40, 40, QImage.Format.Format_ARGB32)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor("#82efba"), 2))
+    painter.setBrush(QColor("#53d993"))
+    painter.drawRoundedRect(QRectF(2, 2, 36, 36), 9, 9)
+    painter.setPen(QPen(QColor("#10271c"), 4, Qt.PenStyle.SolidLine,
+                        Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    path = QPainterPath(QPointF(11, 20))
+    path.lineTo(17, 26); path.lineTo(29, 13)
+    painter.drawPath(path)
+    painter.end()
+    return image
+
+
 def logo_image(size=256):
     image = QImage(size, size, QImage.Format.Format_ARGB32)
     image.fill(Qt.GlobalColor.transparent)
@@ -52,7 +69,7 @@ QWidget#header { background: #100e17; border-bottom: 1px solid #2b2439; }
 QWidget#card { background: #16121e; border: 1px solid #30273f; border-radius: 14px; }
 QWidget#previewSurface { background: #100d17; border: 1px solid #30273f; border-radius: 12px; }
 QLabel { background: transparent; border: none; }
-QLabel#brand { font-size: 23px; font-weight: 700; letter-spacing: -0.5px; }
+QLabel#brand { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
 QLabel#tagline, QLabel#muted { color: #9e93b1; font-size: 12px; }
 QLabel#eyebrow { color: #bc9ce9; font-size: 10px; font-weight: 600; letter-spacing: 1.8px; }
 QLabel#sectionTitle { font-size: 21px; font-weight: 600; letter-spacing: -0.4px; }
@@ -61,7 +78,7 @@ QLabel#version { color: #c6afeb; border: 1px solid #3e3052; border-radius: 5px; 
 QLabel#badge { color: #d2b7ff; background: #251b35; border: 1px solid #403052; border-radius: 12px; padding: 5px 12px; font-size: 11px; }
 QLabel#emptyTitle { font-size: 18px; font-weight: 600; color: #dcd0ed; }
 QLabel#emptyHint { color: #8c7e9f; font-size: 12px; }
-QLineEdit { background: #100d17; border: 1px solid #3b304d; border-radius: 8px; padding: 11px 13px; color: #eee7f9; selection-background-color: #7548b5; }
+QLineEdit { background: #100d17; border: 1px solid #3b304d; border-radius: 7px; padding: 7px 9px; color: #eee7f9; selection-background-color: #7548b5; }
 QLineEdit:focus { border: 1px solid #b28ae9; background: #171020; }
 QLineEdit:read-only { color: #b6a7c8; }
 QPushButton { background: #20192b; border: 1px solid #433452; border-radius: 8px; padding: 10px 15px; font-weight: 500; color: #e1d4f1; }
