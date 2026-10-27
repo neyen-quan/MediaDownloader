@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 import zipfile
 
@@ -39,7 +40,18 @@ def get_ffmpeg():
     cache = ROOT / "build" / "ffmpeg-download"
     cache.mkdir(parents=True, exist_ok=True)
     base = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-    checksum = urllib.request.urlopen(base + ".sha256", timeout=60).read().decode().split()[0].lower()
+    checksum_file = cache / "verified-sha256.txt"
+    if checksum_file.exists():
+        checksum = checksum_file.read_text(encoding="ascii").strip()
+    else:
+        for attempt in range(3):
+            try:
+                checksum = urllib.request.urlopen(base + ".sha256", timeout=60).read().decode().split()[0].lower()
+                break
+            except OSError:
+                if attempt == 2:
+                    raise
+                time.sleep(2 * (attempt + 1))
     if len(checksum) != 64 or any(c not in "0123456789abcdef" for c in checksum):
         raise RuntimeError("Invalid upstream FFmpeg checksum")
     archive = cache / "ffmpeg.zip"
@@ -49,6 +61,7 @@ def get_ffmpeg():
         actual = hashlib.file_digest(f, "sha256").hexdigest()
     if actual != checksum:
         raise RuntimeError("FFmpeg SHA-256 mismatch; refusing to build")
+    checksum_file.write_text(checksum, encoding="ascii")
     target = ROOT / "dist" / "MediaDownloader"
     licenses = target / "licenses" / "ffmpeg"
     licenses.mkdir(parents=True, exist_ok=True)
