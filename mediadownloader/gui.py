@@ -608,11 +608,13 @@ class Window(QMainWindow):
             return
         def validate(cancel, progress):
             progress(0, "Verificando paquete de actualización…")
-            manifest = validate_package(chosen)
+            manifest = validate_package(chosen, Path(sys.executable).parent)
             return manifest
         def done(manifest):
+            kind = (f"Parche incremental desde {manifest['base']['version']}" if manifest['schema'] == 2
+                    else "Paquete completo")
             answer = QMessageBox.question(self, "Actualizar programa",
-                f"Paquete MediaDownloader {manifest['version']} verificado.\n"
+                f"{kind}: MediaDownloader {manifest['version']} verificado.\n"
                 "Instalá únicamente ZIPs de una fuente de confianza.\n"
                 "Se cerrará el programa, se guardará una copia anterior y se reiniciará. ¿Continuar?")
             if answer == QMessageBox.StandardButton.Yes:

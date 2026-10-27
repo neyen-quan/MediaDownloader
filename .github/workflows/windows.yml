@@ -27,6 +27,10 @@ jobs:
           cache: pip
       - name: Instalar dependencias fijadas
         run: python -m pip install -r requirements-dev.txt
+      - name: Recuperar base publicada y mantener FFmpeg sin cambios
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/delta_release.py --prepare
       - name: Preparar FFmpeg verificado para todas las pruebas
         shell: pwsh
         run: |
@@ -54,6 +58,24 @@ jobs:
             dist/MediaDownloader-*-Windows-x64.zip
             dist/MediaDownloader-*-Windows-x64.zip.sha256
           if-no-files-found: error
+      - name: Generar y probar parche incremental desde la versión publicada
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/delta_release.py
+      - name: Entregar parche pequeño por separado
+        if: hashFiles('dist/*-patch.zip') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: MediaDownloader-parche
+          path: |
+            dist/*-patch.zip
+            dist/*-patch.zip.sha256
+          if-no-files-found: error
+      - name: Publicar versión verificada y conservar base para próximos parches
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/mediadownloader-v1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/delta_release.py --publish
       - name: Informe de pruebas
         if: always()
         run: python tools/ci_report.py --publish

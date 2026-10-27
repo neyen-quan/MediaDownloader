@@ -63,12 +63,12 @@ def read_manifest(raw):
         return result
     try:
         manifest = json.loads(raw, object_pairs_hook=unique_pairs)
-        if manifest["application"] != APPLICATION or manifest["schema"] != 1:
+        if manifest["application"] != APPLICATION or manifest["schema"] not in (1, 2):
             raise ValueError()
         if not isinstance(manifest["version"], str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?", manifest["version"]):
             raise ValueError()
         files = manifest["files"]
-        if not isinstance(files, dict) or not files or len(files) > MAX_FILES:
+        if not isinstance(files, dict) or (not files and manifest["schema"] == 1) or len(files) > MAX_FILES:
             raise ValueError()
         names = set()
         for name, digest in files.items():
@@ -78,7 +78,17 @@ def read_manifest(raw):
             if name.casefold() in names or name.casefold() == MANIFEST:
                 raise ValueError()
             names.add(name.casefold())
-        if not {"MediaDownloader.exe", "MediaDownloaderUpdater.exe"} <= files.keys():
+        if manifest["schema"] == 2:
+            base, target = manifest["base"], manifest["target"]
+            if base.get("schema") != 1 or target.get("schema") != 1:
+                raise ValueError()
+            read_manifest(json.dumps(base)); read_manifest(json.dumps(target))
+            if target["version"] != manifest["version"] or base["version"] == target["version"]:
+                raise ValueError()
+            changed = {n: h for n, h in target["files"].items() if base["files"].get(n) != h}
+            if files != changed:
+                raise ValueError()
+        elif not {"MediaDownloader.exe", "MediaDownloaderUpdater.exe"} <= files.keys():
             raise ValueError()
         return manifest
     except (ValueError, KeyError, TypeError, AttributeError, UnicodeError):
@@ -135,9 +145,12 @@ def extract_package(archive, stage):
         raise UpdateError("No se pudo leer o extraer el ZIP. Comprobá el espacio libre y los permisos.") from e
 
 
-def validate_package(archive):
+def validate_package(archive, installed=None):
     with tempfile.TemporaryDirectory(prefix="MediaDownloader-check-") as stage:
-        return extract_package(archive, Path(stage))
+        manifest = extract_package(archive, Path(stage))
+        if installed is not None and manifest["schema"] == 2:
+            materialize_delta(Path(installed), Path(stage), manifest)
+        return manifest
 
 
 def build_package(root, output, version):
@@ -172,6 +185,68 @@ def locations(root):
     root = Path(root).resolve()
     return (root.parent / (root.name + ".previous"),
             root.parent / (root.name + ".update-state.json"))
+
+
+def build_delta(base, target, output, version):
+    """Create a changed-files-only ZIP against an exact, installed full manifest."""
+    base, target, output = Path(base).resolve(), Path(target).resolve(), Path(output).resolve()
+    if base in output.parents or target in output.parents:
+        raise UpdateError("Guardá el parche fuera de las carpetas de origen.")
+    baseline = read_manifest((base / MANIFEST).read_bytes())
+    if baseline["schema"] != 1:
+        raise UpdateError("La base debe ser una instalación completa.")
+    for name, digest in baseline["files"].items():
+        if sha256(base / name) != digest:
+            raise UpdateError("La instalación de referencia fue modificada.")
+    files = {}
+    for path in sorted(target.rglob("*")):
+        if path.is_symlink():
+            raise UpdateError("No se pueden empaquetar enlaces simbólicos.")
+        if path.is_file() and path.name != MANIFEST:
+            name = path.relative_to(target).as_posix()
+            safe_name(name)
+            files[name] = sha256(path)
+    complete = {"application": APPLICATION, "schema": 1, "version": version, "files": files}
+    manifest = {"application": APPLICATION, "schema": 2, "version": version,
+                "base": baseline, "target": complete,
+                "files": {n: h for n, h in files.items() if baseline["files"].get(n) != h}}
+    read_manifest(json.dumps(manifest))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(output.name + ".part")
+    try:
+        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as z:
+            for name in manifest["files"]:
+                z.write(target / name, name)
+            z.writestr(MANIFEST, json.dumps(manifest, indent=2))
+        validate_package(temporary)
+        os.replace(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return manifest
+
+
+def materialize_delta(root, stage, manifest):
+    """Reconstruct in staging; never modify the live installation in place."""
+    base, target = manifest["base"], manifest["target"]
+    try:
+        installed = read_manifest((root / MANIFEST).read_bytes())
+    except OSError:
+        raise UpdateError("Falta la versión base del parche. Instalá primero la actualización de transición.") from None
+    if installed != base:
+        raise UpdateError(f"Este parche requiere MediaDownloader {base['version']}. No corresponde a la instalación actual.")
+    # Check all managed files, including ones removed/replaced in the target.
+    for name, digest in base["files"].items():
+        path = root / name
+        if path.is_symlink() or not path.is_file() or sha256(path) != digest:
+            raise UpdateError("La instalación base está incompleta o modificada. Usá el paquete completo para repararla.")
+    for name, digest in target["files"].items():
+        path = stage / name
+        if name not in manifest["files"]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root / name, path)
+        if sha256(path) != digest:
+            raise UpdateError("No se pudo reconstruir y verificar la nueva versión.")
+    (stage / MANIFEST).write_text(json.dumps(target), encoding="utf-8")
 
 
 def check_backup_path(path):
@@ -299,7 +374,9 @@ def apply_update(root, archive=None, restore=False, health=smoke):
                 # Preserve the backup until the replacement is completely prepared.
                 shutil.copytree(backup, stage, dirs_exist_ok=True)
             else:
-                extract_package(archive, stage)
+                manifest = extract_package(archive, stage)
+                if manifest["schema"] == 2:
+                    materialize_delta(root, stage, manifest)
             preserve_user_files(root, stage)
             journal(state, {"phase": "prepared"})
             if older.exists():

@@ -23,6 +23,17 @@ def run(*args):
 
 
 def get_ffmpeg():
+    # UI patches reuse the verified baseline's media tools instead of silently
+    # upgrading a heavyweight dependency on every build.
+    baseline = os.environ.get("MEDIADOWNLOADER_FFMPEG_BASELINE")
+    if baseline and not os.environ.get("MEDIADOWNLOADER_REFRESH_FFMPEG"):
+        target = ROOT / "dist/MediaDownloader"
+        target.mkdir(parents=True, exist_ok=True)
+        for name in ("ffmpeg.exe", "ffprobe.exe"):
+            shutil.copy2(Path(baseline) / name, target / name)
+            run(str(target / name), "-version")
+        shutil.copytree(Path(baseline) / "licenses/ffmpeg", target / "licenses/ffmpeg", dirs_exist_ok=True)
+        return
     # gyan.dev is one of the Windows binary suppliers linked by ffmpeg.org/download.html.
     # Verify its published SHA-256 before using any executable; never disable HTTPS validation.
     cache = ROOT / "build" / "ffmpeg-download"

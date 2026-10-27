@@ -10,7 +10,7 @@ import json
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from mediadownloader.updater import build_package, extract_package, sha256, locations
+from mediadownloader.updater import build_package, build_delta, extract_package, sha256, locations
 
 
 def main():
@@ -37,6 +37,20 @@ def main():
         assert subsystem(exe) == 2, "GUI executable would create a terminal"
         assert subsystem(worker) == 3, "Engine must retain redirected standard streams"
         subprocess.run([str(exe), "--smoke-test"], check=True, timeout=90)
+        # Use the actual frozen updater to apply a tiny patch that omits all DLLs/FFmpeg.
+        delta_target = temp / "delta-target"; shutil.copytree(root, delta_target)
+        (delta_target / "PATCH-TEST.txt").write_text("incremental update")
+        delta_zip = temp / "incremental.zip"
+        delta = build_delta(root, delta_target, delta_zip, "99.0.0-test")
+        assert set(delta["files"]) == {"PATCH-TEST.txt"}
+        delta_helper = temp / "delta-helper.exe"
+        shutil.copy2(root / "MediaDownloaderUpdater.exe", delta_helper)
+        subprocess.run([str(delta_helper), "--root", str(root), "--zip", str(delta_zip),
+                        "--no-relaunch"], check=True, timeout=240)
+        assert (root / "PATCH-TEST.txt").exists()
+        subprocess.run([str(delta_helper), "--root", str(root), "--restore", "--no-relaunch"],
+                       check=True, timeout=240)
+        assert not (root / "PATCH-TEST.txt").exists()
         # Exercise a real Windows HWND and read back the exact Shell pinning properties.
         # Offscreen Qt handles cannot test Windows taskbar metadata.
         shell_report = temp / "shell-properties.json"
