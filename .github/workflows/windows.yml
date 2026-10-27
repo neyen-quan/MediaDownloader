@@ -15,6 +15,7 @@ jobs:
     runs-on: windows-2022
     permissions:
       contents: write # Publish controlled test diagnostics on a separate ci/ ref.
+      actions: read # Bootstrap FFmpeg from the verified 1.0.6 artifact.
     timeout-minutes: 35
     env:
       QT_QPA_PLATFORM: offscreen

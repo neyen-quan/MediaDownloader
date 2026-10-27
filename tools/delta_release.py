@@ -19,6 +19,14 @@ def gh(*args):
 
 def prepare():
     if __version__ == "1.0.7":
+        # Bootstrap from our already verified 1.0.6 artifact. Its FFmpeg files
+        # need no upgrade for this updater-only transition, even if upstream is down.
+        folder = ROOT / "build/patch-base"
+        if not folder.exists():
+            folder.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory() as temp:
+                gh('run', 'download', '39534612183', '--name', 'MediaDownloader-Windows-x64', '--dir', temp)
+                extract_package(next(Path(temp).glob('*-Windows-x64.zip')), folder)
         return
     folder = ROOT / "build/patch-base"
     if folder.exists():
@@ -90,7 +98,7 @@ def publish():
 if __name__ == '__main__':
     if '--prepare' in sys.argv:
         prepare()
-        if __version__ != '1.0.7' and os.environ.get('GITHUB_ENV'):
+        if (ROOT / 'build/patch-base').exists() and os.environ.get('GITHUB_ENV'):
             with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
                 f.write('MEDIADOWNLOADER_FFMPEG_BASELINE=' + str(ROOT / 'build/patch-base') + '\n')
     elif '--publish' in sys.argv:
