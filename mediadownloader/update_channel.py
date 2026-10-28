@@ -96,6 +96,7 @@ def download(info, folder, cancel, progress):
     import os
     path = Path(name)
     try:
+        progress(-1, 'Conectando con GitHub para descargar el parche…')
         received = 0; digest = hashlib.sha256()
         with os.fdopen(fd, 'wb') as output, response(p['url'], cancel) as r:
             for chunk in r.iter_content(256 * 1024):
@@ -104,7 +105,7 @@ def download(info, folder, cancel, progress):
                 if received > p['size']:
                     raise UserError('El parche supera el tamaño anunciado.')
                 output.write(chunk); digest.update(chunk)
-                progress(int(received * 100 / p['size']), 'Descargando actualización…')
+                progress(int(received * 100 / p['size']), f'Descargando: {received / 1024**2:.1f} / {p["size"] / 1024**2:.1f} MiB')
             output.flush(); os.fsync(output.fileno())
         if received != p['size'] or digest.hexdigest() != p['sha256']:
             raise UserError('No coincide el SHA-256 o el tamaño del parche. No se instalará.')

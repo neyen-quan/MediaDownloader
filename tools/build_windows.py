@@ -92,7 +92,8 @@ def main():
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "MediaDownloader.spec")
     icon = ROOT / "build" / "branding" / "MediaDownloader.ico"
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--windowed",
-        "--name", "MediaDownloaderUpdater", "--icon", str(icon), "updater_entry.py")
+        "--name", "MediaDownloaderUpdater", "--icon", str(icon),
+        "--manifest", str(ROOT / "resources/updater.manifest"), "updater_entry.py")
     target = ROOT / "dist" / "MediaDownloader"
     shutil.copy2(ROOT / "dist" / "MediaDownloaderUpdater.exe", target)
     shutil.copy2(icon, target / "MediaDownloader.ico")
@@ -120,6 +121,9 @@ def main():
     build_package(target, archive, version)
     digest = hashlib.file_digest(archive.open("rb"), "sha256").hexdigest()
     archive.with_suffix(".zip.sha256").write_text(f"{digest}  {archive.name}\n", encoding="ascii")
+    repair = ROOT / 'dist/MediaDownloader-Repararactualizador.exe'
+    shutil.copy2(target / 'MediaDownloaderUpdater.exe', repair)
+    repair.with_suffix('.exe.sha256').write_text(f'{hashlib.file_digest(repair.open("rb"), "sha256").hexdigest()}  {repair.name}\n', encoding='ascii')
     print(f"Portable y actualización: {archive}")
 
 

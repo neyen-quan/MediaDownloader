@@ -28,3 +28,9 @@ El flujo normal es Actualizar programa → Buscar actualizaciones → Descargar 
 Un commit en main con una versión nueva inicia el workflow. El mismo número con tag existente no vuelve a publicar. La release se prepara como borrador con todos sus archivos, se descargan y verifican hashes y luego se publica latest.json como canal estable. El paquete completo permanece separado.
 
 Recuperación: ejecutar el workflow actual desde main mediante workflow_dispatch y release_tag. El código corresponde al tag; las herramientas de compilación/publicación se toman de main, evitando repetir un workflow obsoleto. Una release completa existente se verifica y no se sobrescribe. Una release incompleta puede completarse sin crear otra con el mismo tag.
+
+## Progreso y desbloqueo desde 1.0.10
+
+La descarga muestra porcentaje, MiB recibidos, tiempo y falta de avance. La verificación tiene progreso por etapa y la instalación abre una ventana nativa que permanece visible hasta el reinicio o el error/recuperación.
+
+Las versiones 1.0.8/1.0.9 podían perder la instalación pendiente si el hilo terminaba mientras se confirmaba. Si no reinician después de confirmar, cerrar el programa y abrir el asset `MediaDownloader-Repararactualizador.exe` de la release 1.0.10. Elegir el MediaDownloader.exe instalado y el ZIP incremental correspondiente a su versión, confirmar y esperar. Es el mismo instalador, con verificación, respaldo y recuperación; no un segundo mecanismo de actualización. Usar solo el EXE y los ZIPs publicados en el repositorio oficial.

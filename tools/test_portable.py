@@ -37,6 +37,13 @@ def main():
         assert subsystem(exe) == 2, "GUI executable would create a terminal"
         assert subsystem(worker) == 3, "Engine must retain redirected standard streams"
         subprocess.run([str(exe), "--smoke-test"], check=True, timeout=90)
+        progress_report = temp / 'progress.json'
+        subprocess.run([str(root / 'MediaDownloaderUpdater.exe'), '--root', str(root),
+                        '--no-relaunch', '--progress-report', str(progress_report)], check=True, timeout=45)
+        states = json.loads(progress_report.read_text(encoding='utf-8'))
+        assert all(s['visible'] for s in states), states
+        assert states[1]['position'] == 45 and states[2]['position'] == 100, states
+        assert states[1]['text'] == 'Verificando archivos…', states
         # Use the actual frozen updater to apply a tiny patch that omits all DLLs/FFmpeg.
         delta_target = temp / "delta-target"; shutil.copytree(root, delta_target)
         (delta_target / "licenses/PATCH-TEST.txt").write_text("incremental update")

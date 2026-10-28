@@ -23,7 +23,7 @@ from .appearance import STYLE, app_icon, checkbox_image
 from .image_preview import ImagePreview, PortraitFrame
 from . import windows_shell
 from . import engines
-from .updater import validate_package, locations
+from .updater import validate_package, locations, UpdateError
 
 
 class Task(QThread):
@@ -39,7 +39,7 @@ class Task(QThread):
     def run(self):
         try:
             self.result.emit(self.action(self.cancel, self.progress.emit))
-        except (UserError, Cancelled) as e:
+        except (UserError, Cancelled, UpdateError) as e:
             self.error.emit(str(e))
         except OSError:
             self.error.emit("No se pudo acceder a un archivo. Revisá los permisos y el espacio libre de la carpeta.")
@@ -358,13 +358,23 @@ class Window(QMainWindow):
         self.task.start()
 
     def report(self, value, message):
-        self.progress.setValue(value)
+        self.progress.setRange(0, 0 if value < 0 else 100)
+        if value >= 0:
+            self.progress.setValue(value)
         self.status.setText(message)
 
     def failed(self, message):
         self.status.setText(message)
         if not self.pending_close:
             QMessageBox.warning(self, "MediaDownloader", message)
+
+    def schedule_after_task(self, action):
+        # QMessageBox.exec() runs a nested event loop: finished may arrive while
+        # confirmation is still open. Handle both orders explicitly.
+        if self.task:
+            self.after_task = action
+        else:
+            QTimer.singleShot(0, action)
 
     def task_finished(self):
         old, self.task = self.task, None

@@ -39,6 +39,13 @@ class UpdateError(Exception):
     pass
 
 
+def emit_progress(progress, value, message, cancel=None):
+    if cancel is not None and cancel.is_set():
+        raise UpdateError('Operación cancelada.')
+    if progress:
+        progress(value, message)
+
+
 def safe_name(name):
     if not isinstance(name, str) or not name or "\\" in name or name.startswith("/"):
         raise UpdateError("El ZIP contiene una ruta no permitida.")
@@ -132,7 +139,7 @@ def inspect_archive(z):
     return manifest
 
 
-def extract_package(archive, stage):
+def extract_package(archive, stage, progress=None, cancel=None):
     """Only extract into a new, empty directory; never call ZipFile.extractall."""
     stage = Path(stage)
     if stage.exists() and any(stage.iterdir()):
@@ -141,6 +148,9 @@ def extract_package(archive, stage):
     try:
         with zipfile.ZipFile(archive) as z:
             manifest = inspect_archive(z)
+            total = sum(z.getinfo(n).file_size for n in manifest['files']) or 1
+            received = 0
+            emit_progress(progress, 0, 'Verificando y extrayendo el paquete…', cancel)
             for name, expected in manifest["files"].items():
                 target = stage.joinpath(*safe_name(name).parts)
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -149,6 +159,8 @@ def extract_package(archive, stage):
                     for block in iter(lambda: source.read(1024 * 1024), b""):
                         h.update(block)
                         dest.write(block)
+                        received += len(block)
+                        emit_progress(progress, int(received * 100 / total), 'Verificando y extrayendo el paquete…', cancel)
                 if h.hexdigest() != expected:
                     raise UpdateError(f"El paquete está dañado: no coincide la verificación de {name}.")
             (stage / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
@@ -157,11 +169,11 @@ def extract_package(archive, stage):
         raise UpdateError("No se pudo leer o extraer el ZIP. Comprobá el espacio libre y los permisos.") from e
 
 
-def validate_package(archive, installed=None):
+def validate_package(archive, installed=None, progress=None, cancel=None):
     with tempfile.TemporaryDirectory(prefix="MediaDownloader-check-") as stage:
-        manifest = extract_package(archive, Path(stage))
+        manifest = extract_package(archive, Path(stage), progress, cancel)
         if installed is not None and manifest["schema"] == 2:
-            materialize_delta(Path(installed), Path(stage), manifest)
+            materialize_delta(Path(installed), Path(stage), manifest, progress, cancel)
         elif installed is not None:
             check_target_version(Path(installed), manifest)
         return manifest
@@ -249,7 +261,7 @@ def build_delta(base, target, output, version):
     return manifest
 
 
-def materialize_delta(root, stage, manifest):
+def materialize_delta(root, stage, manifest, progress=None, cancel=None):
     """Reconstruct in staging; never modify the live installation in place."""
     base, target = manifest["base"], manifest["target"]
     try:
@@ -259,11 +271,13 @@ def materialize_delta(root, stage, manifest):
     if installed != base:
         raise UpdateError(f"Este parche requiere MediaDownloader {base['version']}. No corresponde a la instalación actual.")
     # Check all managed files, including ones removed/replaced in the target.
-    for name, digest in base["files"].items():
+    for i, (name, digest) in enumerate(base['files'].items(), 1):
+        emit_progress(progress, int(i * 100 / len(base['files'])), f"Validando instalación actual: archivo {i}/{len(base['files'])}", cancel)
         path = root / name
         if path.is_symlink() or not path.is_file() or sha256(path) != digest:
             raise UpdateError("La instalación base está incompleta o modificada. Usá el paquete completo para repararla.")
-    for name, digest in target["files"].items():
+    for i, (name, digest) in enumerate(target['files'].items(), 1):
+        emit_progress(progress, int(i * 100 / len(target['files'])), f"Preparando nueva versión: archivo {i}/{len(target['files'])}", cancel)
         path = stage / name
         if name not in manifest["files"]:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -343,15 +357,21 @@ def recover_interrupted(root):
     raise UpdateError("La actualización quedó interrumpida y no se encontró la copia anterior.")
 
 
-def smoke(root):
+def smoke(root, progress=None):
     try:
-        args = [str(root / "MediaDownloader.exe"), "--smoke-test"]
+        args = [str(root / 'MediaDownloader.exe'), '--smoke-test']
         manifest = read_manifest((root / MANIFEST).read_bytes())
-        if re.fullmatch(r"\d+\.\d+\.\d+", manifest['version']):
+        if re.fullmatch(r'\d+\.\d+\.\d+', manifest['version']):
             args += ['--expected-version', manifest['version']]
-        result = subprocess.run(args, cwd=root,
-                                timeout=60, creationflags=0x08000000 if os.name == "nt" else 0)
-        return result.returncode == 0
+        process = subprocess.Popen(args, cwd=root, creationflags=0x08000000 if os.name == 'nt' else 0)
+        started = time.monotonic()
+        while process.poll() is None:
+            emit_progress(progress, -1, 'Comprobando el arranque de la nueva versión…')
+            if time.monotonic() - started > 60:
+                process.kill(); process.wait()
+                return False
+            time.sleep(0.1)
+        return process.returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -383,9 +403,10 @@ def preserve_user_files(root, stage):
         shutil.copy2(source, target)
 
 
-def apply_update(root, archive=None, restore=False, health=smoke):
+def apply_update(root, archive=None, restore=False, health=smoke, progress=None):
     root = Path(root).resolve()
     backup, state = locations(root)
+    emit_progress(progress, -1, 'Preparando actualización y recuperación…')
     with update_lock(root):
         check_backup_path(backup)
         check_backup_path(root.parent / (root.name + ".older"))
@@ -400,12 +421,14 @@ def apply_update(root, archive=None, restore=False, health=smoke):
                 if not backup.is_dir():
                     raise UpdateError("Todavía no hay una versión anterior para recuperar.")
                 # Preserve the backup until the replacement is completely prepared.
+                emit_progress(progress, -1, 'Preparando la versión anterior…')
                 shutil.copytree(backup, stage, dirs_exist_ok=True)
             else:
-                manifest = extract_package(archive, stage)
+                manifest = extract_package(archive, stage, progress)
                 check_target_version(root, manifest)
                 if manifest["schema"] == 2:
-                    materialize_delta(root, stage, manifest)
+                    materialize_delta(root, stage, manifest, progress)
+            emit_progress(progress, -1, 'Conservando archivos personales y preparando respaldo…')
             preserve_user_files(root, stage)
             journal(state, {"phase": "prepared"})
             if older.exists():
@@ -415,12 +438,17 @@ def apply_update(root, archive=None, restore=False, health=smoke):
             # Journal precedes both moves: crash recovery covers either move boundary.
             journal(state, {"phase": "moving"})
             try:
+                emit_progress(progress, -1, 'Respaldando la versión actual…')
                 root.rename(backup)
                 journal(state, {"phase": "swapping"})
+                emit_progress(progress, -1, 'Instalando la nueva versión…')
                 stage.rename(root)
-                if not health(root):
+                emit_progress(progress, -1, 'Comprobando el arranque de la nueva versión…')
+                healthy = smoke(root, progress) if health is smoke else health(root)
+                if not healthy:
                     raise UpdateError("La nueva versión no pudo arrancar. Se recuperó la versión anterior.")
             except BaseException:
+                emit_progress(progress, -1, 'Recuperando la copia anterior…')
                 if backup.exists():
                     if root.exists():
                         shutil.rmtree(root)
@@ -432,13 +460,14 @@ def apply_update(root, archive=None, restore=False, health=smoke):
             state.unlink(missing_ok=True)
             if older.exists():
                 shutil.rmtree(older)
+            emit_progress(progress, 100, 'Actualización completada. Reiniciando MediaDownloader…')
             return "restored" if restore else "updated"
         finally:
             if stage.exists():
                 shutil.rmtree(stage)
 
 
-def wait_parent(pid, timeout=90):
+def wait_parent(pid, timeout=90, progress=None):
     if not pid:
         return
     if os.name == "nt":
@@ -453,8 +482,14 @@ def wait_parent(pid, timeout=90):
                 return
             raise UpdateError("No se pudo esperar el cierre del programa. Cerralo y ejecutá Recuperar versión anterior.cmd.")
         try:
-            if kernel.WaitForSingleObject(handle, timeout * 1000) != 0:
-                raise UpdateError("Cerrá MediaDownloader antes de actualizar.")
+            started = time.monotonic()
+            while True:
+                result = kernel.WaitForSingleObject(handle, 100)
+                if result == 0: break
+                if result != 0x102: raise UpdateError('No se pudo esperar el cierre de MediaDownloader.')
+                emit_progress(progress, -1, 'Esperando el cierre de MediaDownloader…')
+                if time.monotonic() - started > timeout:
+                    raise UpdateError('Cerrá MediaDownloader antes de actualizar.')
         finally:
             kernel.CloseHandle(handle)
     else:
@@ -464,19 +499,47 @@ def wait_parent(pid, timeout=90):
                 os.kill(pid, 0)
             except ProcessLookupError:
                 return
+            emit_progress(progress, -1, 'Esperando el cierre de MediaDownloader…')
             time.sleep(0.2)
         raise UpdateError("Cerrá MediaDownloader antes de actualizar.")
 
 
 def helper_main(argv=None):
+    if os.name == 'nt' and not (sys.argv[1:] if argv is None else argv):
+        # One-time repair for releases whose nested confirmation loop lost the
+        # pending installation. It invokes this SAME transactional updater.
+        from .install_progress import choose_file
+        ctypes.windll.user32.MessageBoxW(None,
+            'Cerrá MediaDownloader. Luego elegí su MediaDownloader.exe y el ZIP del parche. Tus datos se conservan.',
+            APPLICATION, 0x40)
+        executable = choose_file('Elegí el MediaDownloader.exe que usás', 'MediaDownloader.exe\0MediaDownloader.exe\0\0')
+        if executable is None: return 0
+        if executable.name.lower() != 'mediadownloader.exe': return 1
+        archive = choose_file('Elegí el ZIP de actualización sin descomprimir', 'Actualización ZIP\0*.zip\0\0')
+        if archive is None: return 0
+        if ctypes.windll.user32.MessageBoxW(None, '¿Aplicar el parche elegido y reiniciar MediaDownloader?', APPLICATION, 0x24) != 6:
+            return 0
+        argv = ['--root', str(executable.parent), '--zip', str(archive)]
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--zip", type=Path)
     parser.add_argument("--restore", action="store_true")
     parser.add_argument("--parent", type=int, default=0)
+    parser.add_argument("--progress-report", type=Path)
     parser.add_argument("--no-relaunch", action="store_true", help="Validación automatizada: no abrir ventanas ni reiniciar al terminar")
     args = parser.parse_args(argv)
     root = args.root.resolve()
+    from .install_progress import ProgressWindow
+    if args.progress_report:
+        window = ProgressWindow(root)
+        try:
+            states = []
+            for value, text in [(-1,'Preparando actualización…'),(45,'Verificando archivos…'),(100,'Listo')]:
+                window(value, text); states.append(window.snapshot())
+            args.progress_report.write_text(json.dumps(states), encoding='utf-8')
+        finally:
+            window.close()
+        return 0
     # The recovery launcher also works from .previous if a power cut left the main folder absent.
     if args.restore and root.name.endswith(".previous"):
         original = root.with_name(root.name.removesuffix(".previous"))
@@ -498,9 +561,11 @@ def helper_main(argv=None):
             forwarded += ["--no-relaunch"]
         subprocess.Popen([str(helper), *forwarded], cwd=temp)
         return 0
+    window = ProgressWindow(root) if os.name == 'nt' and not args.no_relaunch else None
+    progress = window if window else None
     try:
-        wait_parent(args.parent)
-        apply_update(root, args.zip, args.restore)
+        wait_parent(args.parent, progress=progress)
+        apply_update(root, args.zip, args.restore, progress=progress)
         if not args.no_relaunch:
             subprocess.Popen([str(root / "MediaDownloader.exe")], cwd=root)
         return 0
@@ -518,4 +583,6 @@ def helper_main(argv=None):
         if not args.no_relaunch and (root / "MediaDownloader.exe").exists():
             subprocess.Popen([str(root / "MediaDownloader.exe")], cwd=root)
         return 1
-
+    finally:
+        if window:
+            window.close()

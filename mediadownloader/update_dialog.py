@@ -1,7 +1,9 @@
 """Online and local updates share the application's existing installer/helper."""
 import sys
+import time
 from pathlib import Path
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox, QProgressBar
 from . import __version__, update_channel
 from .core import data_dir, UserError
 from .updater import validate_package
@@ -30,6 +32,14 @@ class UpdateDialog(QDialog):
         self.message = QLabel('Actualizaciones online habilitadas. Consultá GitHub o elegí un ZIP local.')
         self.message.setWordWrap(True); box.addWidget(self.message)
         self.progress = QLabel(''); box.addWidget(self.progress)
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 100); self.bar.setValue(0)
+        self.bar.setStyleSheet('QProgressBar { min-height: 22px; max-height: 22px; border: 1px solid #51405f; border-radius: 5px; text-align: center; background: #241b30; } QProgressBar::chunk { background: #9763df; }')
+        box.addWidget(self.bar)
+        self.activity = QLabel(''); box.addWidget(self.activity)
+        self.started_at = self.last_advance = time.monotonic()
+        self.clock = QTimer(self); self.clock.setInterval(1000)
+        self.clock.timeout.connect(self.tick)
         row = QHBoxLayout()
         self.install = QPushButton('Descargar e instalar'); self.install.setObjectName('primary')
         self.install.clicked.connect(self.download)
@@ -39,6 +49,19 @@ class UpdateDialog(QDialog):
         box.addWidget(self.cancel_button)
         close = QPushButton('Cerrar'); close.clicked.connect(self.reject); box.addWidget(close)
         self.refresh()
+
+    def report(self, value, message):
+        self.last_advance = time.monotonic()
+        self.bar.setRange(0, 0 if value < 0 else 100)
+        if value >= 0:
+            self.bar.setValue(value)
+        self.progress.setText(message)
+        self.tick()
+
+    def tick(self):
+        elapsed = int(time.monotonic() - self.started_at)
+        idle = int(time.monotonic() - self.last_advance)
+        self.activity.setText(f'Tiempo transcurrido: {elapsed}s' + (f' · Sin avance nuevo hace {idle}s' if idle >= 5 else ''))
 
     def reject(self):
         if not self.window.task:
@@ -61,10 +84,24 @@ class UpdateDialog(QDialog):
         if self.window.task:
             return
         self.window.start(action, done)
-        self.window.task.error.connect(self.message.setText)
-        self.window.task.progress.connect(lambda value, message: self.progress.setText(f'{message} {value}%'))
-        self.window.task.finished.connect(self.refresh)
+        self.started_at = self.last_advance = time.monotonic()
+        self.report(-1, 'Iniciando operación…')
+        self.clock.start()
+        self.window.task.error.connect(self.operation_failed)
+        self.window.task.progress.connect(self.report)
+        self.window.task.finished.connect(self.operation_finished)
         self.refresh()
+
+    def operation_finished(self):
+        self.clock.stop()
+        self.refresh()
+        if self.bar.maximum() == 0:
+            self.bar.setRange(0, 100)
+
+    def operation_failed(self, message):
+        self.message.setText(message)
+        self.progress.setText('Operación detenida: ' + message)
+        self.bar.setRange(0, 100); self.bar.setValue(0)
 
     def save_channel(self):
         value = self.channel.text().strip()
@@ -95,14 +132,20 @@ class UpdateDialog(QDialog):
                 self.message.setText(f"Actualización {info['installed']} → {info['available']}. Parche de {info['patch']['size'] / 1024**2:.1f} MiB. Se pedirá confirmación antes de instalar.")
             else:
                 self.message.setText('No hay un parche directo para esta versión. Instalá primero la transición o un ZIP local compatible.')
-        self.run(lambda cancel, progress: update_channel.check(channel, __version__, cancel), done)
+        def action(cancel, progress):
+            progress(-1, 'Consultando el canal de GitHub…')
+            result = update_channel.check(channel, __version__, cancel)
+            progress(100, 'Consulta terminada.')
+            return result
+        self.run(action, done)
 
     def confirm(self, path, manifest):
         answer = QMessageBox.question(self, 'Instalar actualización',
             f"MediaDownloader {__version__} → {manifest['version']} verificado.\n"
             'Se cerrará el programa, se respaldará la versión actual y se reiniciará. ¿Continuar?')
         if answer == QMessageBox.StandardButton.Yes:
-            self.window.after_task = lambda: self.window.launch_update(path)
+            self.report(-1, 'Iniciando el instalador. Se cerrará MediaDownloader…')
+            self.window.schedule_after_task(lambda: self.window.launch_update(path))
             self.accept()
 
     def download(self):
@@ -112,7 +155,9 @@ class UpdateDialog(QDialog):
         def action(cancel, progress):
             path = update_channel.download(info, data_dir() / 'updates', cancel, progress)
             try:
-                manifest = validate_package(path, Path(sys.executable).parent)
+                progress(-1, 'Descarga completa. Verificando el ZIP y la instalación…')
+                manifest = validate_package(path, Path(sys.executable).parent, progress=progress, cancel=cancel)
+                progress(100, 'Paquete verificado. Esperando tu confirmación.')
                 if manifest['schema'] != 2 or manifest['base']['version'] != __version__ or manifest['version'] != info['available']:
                     raise UserError('El ZIP no coincide con las versiones anunciadas por el canal.')
                 return path, manifest
@@ -124,5 +169,9 @@ class UpdateDialog(QDialog):
     def local_zip(self):
         path, _ = QFileDialog.getOpenFileName(self, 'Instalar actualización local', '', 'Actualización (*.zip)')
         if path:
-            self.run(lambda cancel, progress: (path, validate_package(path, Path(sys.executable).parent)),
-                     lambda result: self.confirm(*result))
+            def action(cancel, progress):
+                progress(-1, 'Verificando el ZIP local…')
+                manifest = validate_package(path, Path(sys.executable).parent, progress=progress, cancel=cancel)
+                progress(100, 'Paquete verificado. Esperando tu confirmación.')
+                return path, manifest
+            self.run(action, lambda result: self.confirm(*result))

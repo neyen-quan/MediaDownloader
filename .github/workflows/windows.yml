@@ -99,6 +99,7 @@ jobs:
             dist/*Windows-x64.zip*
             dist/*patch.zip*
             dist/latest.json
+            dist/MediaDownloader-Repararactualizador.exe*
           if-no-files-found: error
       - name: Informe de pruebas
         if: always() && steps.plan.outputs.publish == 'true'

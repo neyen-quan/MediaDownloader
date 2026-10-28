@@ -112,3 +112,18 @@ def test_future_release_pipeline_builds_and_checks_small_patch(tmp_path, monkeyp
         assert '_internal/dependency.dll' not in z.namelist()
     assert validate_package(output)['base']['version'] == '1.0.7'
 
+
+
+def test_validation_reports_real_stages_and_can_cancel_before_swap(tmp_path):
+    import threading
+    root, target, patch, manifest = setup_delta(tmp_path)
+    reports = []
+    validate_package(patch, root, progress=lambda value, message: reports.append((value, message)))
+    assert any('extrayendo' in msg for _, msg in reports)
+    assert any('Validando instalación actual' in msg for _, msg in reports)
+    assert any('Preparando nueva versión' in msg for _, msg in reports)
+    assert all(-1 <= value <= 100 for value, _ in reports)
+    cancel = threading.Event(); cancel.set()
+    with pytest.raises(UpdateError, match='cancelada'):
+        validate_package(patch, root, cancel=cancel)
+    assert (root / 'MediaDownloader.exe').read_bytes() == b'old'

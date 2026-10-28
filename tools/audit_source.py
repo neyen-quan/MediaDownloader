@@ -16,7 +16,7 @@ def audit():
         if any(p in EXCLUDED for p in rel.parts) or not path.is_file(): continue
         if path.name.lower() in {'cookies.txt', 'settings.json', '.env'} or path.suffix in {'.key', '.pfx', '.p12'}:
             failures.append(str(rel)); continue
-        if path.suffix not in {'.py', '.md', '.txt', '.yml', '.json', '.spec', '.svg'}: continue
+        if path.suffix not in {'.py', '.md', '.txt', '.yml', '.json', '.spec', '.svg', '.manifest'}: continue
         text = path.read_text(encoding='utf-8')
         if any(p.search(text) for p in PATTERNS): failures.append(str(rel))
     if failures: raise SystemExit('Revisar archivos antes de publicar: ' + ', '.join(failures))

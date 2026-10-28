@@ -56,3 +56,51 @@ def test_buttons_download_confirm_apply_and_check_again(tmp_path, monkeypatch):
     wait(app, lambda: window.task is None and again.info is not None)
     assert 'Ya tenés la última versión' in again.message.text() and not again.install.isEnabled()
     again.close(); dialog.close(); window.close()
+
+
+def test_real_nested_confirmation_cannot_lose_pending_install(tmp_path, monkeypatch):
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QMessageBox
+    from mediadownloader.update_dialog import UpdateDialog
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'profile'))
+    app = QApplication.instance() or QApplication([])
+    window = Window(); window.show()
+    dialog = UpdateDialog(window); dialog.show()
+    launched = []
+    monkeypatch.setattr(window, 'launch_update', lambda path: launched.append(path))
+    observed = []
+    def accept_after_finished():
+        # A real modal QMessageBox runs a nested Qt event loop. Keep it open
+        # until task_finished has actually cleared the background task.
+        box = app.activeModalWidget()
+        if isinstance(box, QMessageBox) and window.task is None:
+            observed.append(True)
+            box.button(QMessageBox.StandardButton.Yes).click()
+        else:
+            QTimer.singleShot(10, accept_after_finished)
+    QTimer.singleShot(10, accept_after_finished)
+    dialog.run(lambda cancel, progress: ('fixture.zip', {'version':'99.0.0'}),
+               lambda result: dialog.confirm(*result))
+    wait(app, lambda: bool(launched))
+    assert observed and launched == ['fixture.zip']
+    assert window.task is None and window.after_task is None
+    dialog.close(); window.close()
+
+
+def test_progress_is_visible_and_unknown_phases_use_busy_bar(tmp_path, monkeypatch):
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'profile'))
+    app = QApplication.instance() or QApplication([])
+    window = Window(); dialog = UpdateDialog(window); dialog.show()
+    dialog.report(42, 'Descargando: 4.2 / 10.0 MiB')
+    assert dialog.bar.isVisible() and dialog.bar.value() == 42
+    assert 'MiB' in dialog.progress.text()
+    dialog.report(-1, 'Validando instalación actual…')
+    assert dialog.bar.maximum() == 0 and 'Validando' in dialog.progress.text()
+    import time
+    dialog.last_advance = time.monotonic() - 9
+    dialog.tick()
+    assert 'Sin avance nuevo' in dialog.activity.text()
+    dialog.operation_failed('fixture error')
+    assert dialog.bar.maximum() == 100 and dialog.bar.value() == 0
+    assert 'detenida' in dialog.progress.text()
+    dialog.close(); window.close()
