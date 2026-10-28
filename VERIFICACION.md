@@ -18,3 +18,11 @@ El workflow en main es la fuente de resultados observados de cada entrega; un es
 6. Volver a consultar y comprobar «Ya tenés la última versión».
 
 No dar la prueba de aceptación por terminada hasta que el usuario confirme estos resultados. Las cookies y los archivos de configuración no se piden ni se publican.
+
+## Entregas verificadas del canal online
+
+- 1.0.8: Actions 40735767504 aprobado, 98 pruebas Windows, pruebas del portable y multimedia, parche desde 1.0.7 y canal público verificados. Parche: 33.647.768 bytes, SHA-256 `8e71c76fcdd46c6690ced9ed1b8f796c99b7508eecb06f42a99ba4c4b6ac2c90`.
+- 1.0.9: Actions 40759332321 aprobado, versión de prueba online desde 1.0.8. Parche: 33.633.172 bytes, SHA-256 `858f949054f2bc2c5c8357cba35a61748289bba132079100e5d16cc802da9fd7`.
+- Ambas releases contienen portable completo, parche incremental, checksums y latest.json. Las pruebas descargan assets y comprueban SHA-256 antes de publicar el canal estable.
+- La descarga independiente del parche 1.0.8 desde el canal público también pasó validación externa e inventario interno.
+- La prueba de aceptación en la PC del usuario sigue pendiente; no se ha observado su versión instalada ni su reinicio/datos locales desde este entorno.
