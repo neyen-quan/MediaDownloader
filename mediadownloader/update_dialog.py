@@ -27,7 +27,7 @@ class UpdateDialog(QDialog):
         self.save = QPushButton('Guardar canal'); self.save.clicked.connect(self.save_channel)
         self.check_button = QPushButton('Buscar actualizaciones'); self.check_button.clicked.connect(self.check)
         row.addWidget(self.save); row.addWidget(self.check_button); box.addLayout(row)
-        self.message = QLabel('Consultá GitHub o elegí un ZIP local como alternativa.')
+        self.message = QLabel('Actualizaciones online habilitadas. Consultá GitHub o elegí un ZIP local.')
         self.message.setWordWrap(True); box.addWidget(self.message)
         self.progress = QLabel(''); box.addWidget(self.progress)
         row = QHBoxLayout()
