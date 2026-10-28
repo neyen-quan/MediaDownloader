@@ -1,0 +1,25 @@
+MediaDownloader — Windows x64
+
+Instalación nueva: extraer TODO el portable y abrir MediaDownloader.exe.
+Uso: pegar enlace público, Analizar y guardar los elementos elegidos.
+La previsualización carga automáticamente. El zoom no modifica el original.
+
+ACTUALIZAR
+Actualizar programa → Buscar actualizaciones → Descargar e instalar.
+Verificar versiones, confirmar y esperar el reinicio.
+El mismo diálogo permite guardar otro canal GitHub o instalar un ZIP local.
+Los parches contienen solo los archivos modificados; requieren la base indicada.
+Las preferencias, la sesión y las descargas se conservan.
+
+RECUPERAR
+Recuperar versión anterior permite volver a la copia respaldada.
+Si no abre: cerrar el programa y ejecutar Recuperar version anterior.cmd.
+No mover las carpetas durante la actualización; dejar espacio para respaldo y temporales.
+
+DATOS
+Preferencias, canal y sesión: %LOCALAPPDATA%/MediaDownloader.
+Cookies.txt es opcional, sensible y local. Nunca compartirlo ni subirlo a GitHub.
+Las plataformas pueden exigir sesión o bloquear consultas incluso en contenido público.
+
+LICENCIAS
+Código propio GPL-3.0-or-later (LICENSE). Componentes en THIRD_PARTY.md y licenses/.

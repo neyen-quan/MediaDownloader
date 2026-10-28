@@ -1,0 +1,110 @@
+name: Publicar MediaDownloader
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag existente a recuperar con el pipeline actual (ej. v1.0.8)'
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: mediadownloader-release
+  cancel-in-progress: false
+jobs:
+  portable:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: '1'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10'
+          cache: pip
+      - name: Decidir publicación sin duplicar versiones
+        id: plan
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: python tools/release_plan.py
+      - name: Recuperar fuentes conservando las herramientas actuales
+        if: steps.plan.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          SOURCE_COMMIT: ${{ steps.plan.outputs.source }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $saved=Join-Path $env:RUNNER_TEMP 'current-pipeline-tools'
+          Copy-Item tools $saved -Recurse
+          git checkout --detach $env:SOURCE_COMMIT
+          if($LASTEXITCODE -ne 0){throw 'No se pudo recuperar el código de la versión'}
+          Copy-Item "$saved/*" tools -Recurse -Force
+          "MEDIADOWNLOADER_SOURCE_SHA=$env:SOURCE_COMMIT" >> $env:GITHUB_ENV
+      - name: Instalar dependencias Windows fijadas
+        if: steps.plan.outputs.publish == 'true'
+        run: python -m pip install -r requirements-dev.txt
+      - name: Recuperar base publicada y conservar FFmpeg
+        if: steps.plan.outputs.publish == 'true'
+        run: python tools/delta_release.py --prepare
+      - name: Preparar FFmpeg y FFprobe verificados
+        if: steps.plan.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          python -c "from tools.build_windows import get_ffmpeg; get_ffmpeg()"
+          if($LASTEXITCODE -ne 0){throw 'FFmpeg no disponible'}
+          Add-Content -Path $env:GITHUB_PATH -Value "$pwd\dist\MediaDownloader"
+      - name: Pruebas Windows y arranque desde fuentes
+        if: steps.plan.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          python tools/audit_source.py
+          if($LASTEXITCODE -ne 0){throw 'Falló la auditoría de fuentes'}
+          python -m pytest -q --junitxml=results.xml
+          if($LASTEXITCODE -ne 0){throw 'Fallaron las pruebas'}
+          python main.py --smoke-test
+          if($LASTEXITCODE -ne 0){throw 'Falló el arranque'}
+      - name: Compilar portable Windows
+        if: steps.plan.outputs.publish == 'true'
+        run: python tools/build_windows.py
+      - name: Comprobar ejecutables y recuperación
+        if: steps.plan.outputs.publish == 'true'
+        run: python tools/test_portable.py
+      - name: Verificar audio y video con FFmpeg incluido
+        if: steps.plan.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          $env:PATH = "$pwd\dist\MediaDownloader;$env:PATH"
+          $env:MEDIADOWNLOADER_TEST_EXE = "$pwd\dist\MediaDownloader\MediaDownloader.exe"
+          python -m pytest -q tests/test_media_pipeline.py --junitxml=media-results.xml
+      - name: Generar parche, canal y probar actualización online real en Windows
+        if: steps.plan.outputs.publish == 'true'
+        run: python tools/delta_release.py
+      - name: Publicar tag, assets y canal verificados
+        if: steps.plan.outputs.publish == 'true'
+        run: python tools/delta_release.py --publish
+      - uses: actions/upload-artifact@v4
+        if: steps.plan.outputs.publish == 'true' && success()
+        with:
+          name: MediaDownloader-verificado
+          path: |
+            dist/*Windows-x64.zip*
+            dist/*patch.zip*
+            dist/latest.json
+          if-no-files-found: error
+      - name: Informe de pruebas
+        if: always() && steps.plan.outputs.publish == 'true'
+        run: python tools/ci_report.py
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.plan.outputs.publish == 'true'
+        with:
+          name: pruebas-Windows
+          path: '*results.xml'
