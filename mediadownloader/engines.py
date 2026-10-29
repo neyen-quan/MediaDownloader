@@ -82,6 +82,7 @@ def gallery_items(raw, source):
     expected = 0
     received = 0
     story = urlsplit(source).path.startswith("/stories/")
+    highlight = urlsplit(source).path.startswith("/stories/highlights/")
     for message in json.loads(raw):
         if isinstance(message, list) and len(message) == 2 and message[0] == -1:
             error = (str(message[1].get("error", "")) + " " + str(message[1].get("message", ""))).lower()
@@ -92,6 +93,8 @@ def gallery_items(raw, source):
             if "429" in error or "rate limit" in error:
                 raise UserError("Instagram limitó temporalmente las consultas. Esperá antes de volver a analizar.")
             if story and any(term in error for term in ("notfound", "not found", "404")):
+                if highlight:
+                    raise UserError("La historia destacada ya no está disponible o tu cuenta no puede verla. Comprobá el enlace en Instagram con la misma cuenta.")
                 raise UserError("La historia ya no está disponible o tu cuenta no puede verla. Comprobá el enlace en Instagram con la misma cuenta.")
             raise UserError("Instagram no permitió analizar toda la publicación. Puede requerir una sesión local o una actualización del motor.")
         if isinstance(message, list) and message and message[0] == 2:
@@ -121,6 +124,8 @@ def gallery_items(raw, source):
                             engine, source, meta.get("display_url", ""),
                             str(meta.get("description", ""))[:200], manifest=manifest))
     if not result:
+        if highlight:
+            raise UserError("No hay historias disponibles en esa destacada. Puede haberse eliminado o no ser visible para tu cuenta.")
         if story:
             raise UserError("No hay historias disponibles para ese enlace. Pueden haber vencido, haber sido eliminadas o no ser visibles para tu cuenta.")
         raise UserError("Instagram no entregó archivos. Puede exigir iniciar sesión incluso para publicaciones públicas.")
