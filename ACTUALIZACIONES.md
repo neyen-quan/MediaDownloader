@@ -44,3 +44,11 @@ Las versiones anteriores podían mostrar PermissionError tras instalar y comprob
 El actualizador registra ahora una fase committed después de comprobar el arranque. La limpieza posterior es opcional: los bloqueos temporales se reintentan, un respaldo pendiente conserva su manifiesto y la próxima ejecución vuelve a limpiarlo sin deshacer una instalación confirmada. Una falla anterior a la confirmación conserva la recuperación transaccional. No se borran carpetas desconocidas: incluso un respaldo parcialmente limpiado debe identificarse mediante un manifiesto válido del producto, salvo un directorio ya vacío.
 
 Los registros de fallos incluyen la etapa y la excepción con archivo/código de Windows cuando esté disponible. Se guardan localmente y no se suben al repositorio. La imposibilidad de volver a abrir el EXE después de instalar se comunica como tal, sin afirmar que falló el reemplazo de archivos.
+
+## Reparación de preparación y transición desde 1.0.15
+
+El usuario confirmó que 1.0.13 continúa instalada tras intentar 1.0.14. La captura muestra la fase de conservación/preparación, no la limpieza posterior a instalar. El aviso antiguo no permite identificar el archivo bloqueado. No atribuir esa captura a una causa concreta sin evidencia adicional.
+
+Se corrigen dos fallos reproducibles de preparación: eliminación de archivos de respaldo con atributo de solo lectura en Windows, y colisión con un temporal de registro antiguo de nombre fijo. Las violaciones persistentes de acceso siguen deteniendo la instalación, conservando la base y mostrando la operación/archivo exactos. La copia de archivos personales reintenta bloqueos temporales y no omite archivos inaccesibles en silencio.
+
+La interfaz nueva prepara el helper incluido en el ZIP verificado y comprueba su hash y versión base antes de ejecutarlo. Un helper no modificado se verifica contra el inventario de destino. La recuperación continúa usando el helper instalado. Desde la 1.0.13 el código de interfaz nuevo aún no existe: se usa una sola vez el reparador independiente actual, que ahora descarga el parche compatible del canal oficial sin pedir un ZIP manual. Luego se retoma el botón habitual. El programa y los datos del usuario no se sustituyen por una instalación completa.

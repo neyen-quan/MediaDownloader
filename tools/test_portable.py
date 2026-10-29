@@ -7,10 +7,11 @@ import sys
 import tempfile
 import struct
 import json
+import stat
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from mediadownloader.updater import build_package, build_delta, extract_package, sha256, locations
+from mediadownloader.updater import build_package, build_delta, extract_package, sha256, locations, prepare_helper
 
 
 def main():
@@ -89,6 +90,18 @@ def main():
             assert sha256(root / name) == digest, name
         subprocess.run([str(exe), "--smoke-test"], check=True, timeout=90)
         subprocess.run([str(helper), "--root", str(root), "--restore", "--no-relaunch"], check=True, timeout=240)
+        # A real pre-existing read-only backup previously failed before the swap.
+        # Exercise the incoming verified helper and its compiled error handling.
+        older = root.with_name(root.name + '.older')
+        shutil.copytree(locations(root)[0], older)
+        (older / 'MediaDownloader.exe').chmod(stat.S_IREAD)
+        (older / 'mediadownloader-update.json').chmod(stat.S_IREAD)
+        incoming = temp / 'incoming-helper.exe'
+        prepare_helper(root, archive, incoming)
+        subprocess.run([str(incoming), '--root', str(root), '--zip', str(archive),
+                        '--no-relaunch'], check=True, timeout=240)
+        assert not older.exists()
+        assert sha256(exe) == manifest['files']['MediaDownloader.exe']
         # Deliberately broken executable with a valid manifest tests post-update startup rollback.
         broken = temp / "broken"; shutil.copytree(root, broken)
         (broken / "MediaDownloader.exe").write_bytes(b"not a Windows executable")

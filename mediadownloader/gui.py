@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import uuid
+import zipfile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer, QSize
@@ -23,7 +24,7 @@ from .appearance import STYLE, app_icon, checkbox_image
 from .image_preview import ImagePreview, PortraitFrame
 from . import windows_shell
 from . import engines
-from .updater import validate_package, locations, UpdateError
+from .updater import validate_package, locations, UpdateError, prepare_helper
 
 
 class Task(QThread):
@@ -635,17 +636,18 @@ class Window(QMainWindow):
             return
         try:
             temp = Path(tempfile.mkdtemp(prefix="MediaDownloader-update-"))
-            shutil.copy2(helper, temp / helper.name)
             args = [str(temp / helper.name), "--root", str(root), "--parent", str(os.getpid())]
             if restore:
+                shutil.copy2(helper, temp / helper.name)
                 args += ["--restore"]
             else:
                 shutil.copy2(archive, temp / "package.zip")
+                prepare_helper(root, temp / 'package.zip', temp / helper.name)
                 args += ["--zip", str(temp / "package.zip")]
             subprocess.Popen(args, cwd=temp)
             self.close()
-        except OSError:
-            self.failed("No se pudo iniciar el actualizador. Usá una carpeta con permisos de escritura y espacio libre.")
+        except (OSError, ValueError, zipfile.BadZipFile, UpdateError) as error:
+            self.failed(f"No se pudo iniciar el actualizador. La aplicación sigue abierta. Detalle: {error}")
 
     def closeEvent(self, event):
         if self.task or self.preview_task:

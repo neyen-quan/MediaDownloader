@@ -34,6 +34,8 @@ Se conservan configuración, sesión, descargas, nombre/ruta del ejecutable, ico
 
 SHA-256 verifica integridad, no una firma del editor; no hay Authenticode. Usar un canal confiable.
 
+Desde 1.0.15 se ejecuta el actualizador de destino verificado cuando viene en el parche, de modo que las correcciones del instalador sirven para esa misma transición. Las versiones anteriores que fallen antes de instalar necesitan una sola vez el asset `MediaDownloader-Repararactualizador.exe` de la release actual: cerrar el programa, abrir ese reparador y elegir el EXE instalado. El reparador consulta el canal oficial, descarga el parche exacto y lo verifica; no hay que descargar un ZIP manualmente. Pide confirmación antes de aplicar y muestra progreso. No reinstala ni cambia la carpeta elegida. Si Windows sigue bloqueando un archivo, el aviso identifica etapa, detalle y ruta del registro local; no compartir cookies ni preferencias.
+
 ## Desarrollo y compilación
 
 Ver [BUILD.md](BUILD.md), [ACTUALIZACIONES.md](ACTUALIZACIONES.md) y [VERIFICACION.md](VERIFICACION.md). Código, pruebas y recursos están en main. Logo vectorial en mediadownloader/appearance.py; tools/make_icon.py genera el ICO multirresolución usado por el EXE y la barra de tareas.

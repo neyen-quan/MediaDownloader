@@ -195,6 +195,28 @@ def validate_package(archive, installed=None, progress=None, cancel=None):
         return manifest
 
 
+def prepare_helper(root, archive, target):
+    """Launch the verified incoming helper, so installer fixes apply immediately."""
+    name = 'MediaDownloaderUpdater.exe'
+    with zipfile.ZipFile(archive) as z:
+        manifest = inspect_archive(z)
+        check_target_version(root, manifest)
+        if manifest['schema'] == 2:
+            installed = read_manifest((Path(root) / MANIFEST).read_bytes())
+            if installed != manifest['base']:
+                raise UpdateError('El instalador del parche no corresponde a esta versión base.')
+        if name in manifest['files']:
+            with z.open(name) as source, Path(target).open('xb') as output:
+                shutil.copyfileobj(source, output)
+            expected = manifest['files'][name]
+        else:
+            shutil.copy2(Path(root) / name, target)
+            expected = manifest['target']['files'][name]
+        if sha256(target) != expected:
+            Path(target).unlink(missing_ok=True)
+            raise UpdateError('No coincide el hash del instalador. No se ejecutará.')
+
+
 def check_target_version(root, manifest):
     path = root / MANIFEST
     if path.exists():
@@ -324,11 +346,25 @@ def remove_old_backup(path):
         if entry.name == MANIFEST:
             continue
         if entry.is_dir() and not entry.is_symlink():
-            shutil.rmtree(entry)
+            shutil.rmtree(entry, onexc=clear_readonly)
         else:
-            entry.unlink()
-    (path / MANIFEST).unlink(missing_ok=True)
+            try:
+                entry.unlink()
+            except PermissionError as error:
+                clear_readonly(os.unlink, str(entry), error)
+    try:
+        (path / MANIFEST).unlink(missing_ok=True)
+    except PermissionError as error:
+        clear_readonly(os.unlink, str(path / MANIFEST), error)
     path.rmdir()
+
+
+def clear_readonly(operation, path, error):
+    """Only clear the read-only bit, inside an already identified backup."""
+    if not isinstance(error, PermissionError) or os.stat(path).st_mode & stat.S_IWRITE:
+        raise error
+    os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+    operation(path)
 
 
 def finish_committed_update(root, progress=None):
@@ -348,12 +384,17 @@ def finish_committed_update(root, progress=None):
 
 
 def journal(path, state):
-    temporary = path.with_suffix(".tmp")
-    with temporary.open("w", encoding="utf-8") as f:
-        json.dump(state, f)
-        f.flush()
-        os.fsync(f.fileno())
-    retry_filesystem(lambda: os.replace(temporary, path))
+    # A stale/read-only .tmp from an earlier attempt must not block preparation.
+    fd, name = tempfile.mkstemp(prefix=path.name + '-', suffix='.tmp', dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+            f.flush()
+            os.fsync(f.fileno())
+        retry_filesystem(lambda: os.replace(temporary, path))
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 @contextmanager
@@ -445,7 +486,7 @@ def managed_files(root):
         p.relative_to(root).as_posix() for p in (root / "_internal").rglob("*") if p.is_file()}
 
 
-def preserve_user_files(root, stage):
+def preserve_user_files(root, stage, progress=None):
     managed, replacement = managed_files(root), managed_files(stage)
     replacement_folded = {n.casefold() for n in replacement}
     for source in root.rglob("*"):
@@ -459,8 +500,9 @@ def preserve_user_files(root, stage):
         if name.casefold() in replacement_folded:
             raise UpdateError("Un archivo personal coincide con un archivo de la nueva versión. Movelo fuera del programa antes de actualizar.")
         target = stage / name
+        emit_progress(progress, -1, 'Conservando archivo personal: ' + name)
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
+        retry_filesystem(lambda: shutil.copy2(source, target), progress)
 
 
 def apply_update(root, archive=None, restore=False, health=smoke, progress=None):
@@ -489,11 +531,14 @@ def apply_update(root, archive=None, restore=False, health=smoke, progress=None)
                 if manifest["schema"] == 2:
                     materialize_delta(root, stage, manifest, progress)
             emit_progress(progress, -1, 'Conservando archivos personales y preparando respaldo…')
-            preserve_user_files(root, stage)
+            preserve_user_files(root, stage, progress)
+            emit_progress(progress, -1, 'Guardando el registro de preparación…')
             journal(state, {"phase": "prepared"})
             if older.exists():
+                emit_progress(progress, -1, 'Limpiando respaldo pendiente: ' + older.name)
                 retry_filesystem(lambda: remove_old_backup(older), progress)
             if backup.exists():
+                emit_progress(progress, -1, 'Apartando respaldo anterior: ' + backup.name)
                 retry_filesystem(lambda: backup.rename(older), progress)
             # Journal precedes both moves: crash recovery covers either move boundary.
             journal(state, {"phase": "moving"})
@@ -567,26 +612,46 @@ def wait_parent(pid, timeout=90, progress=None):
         raise UpdateError("Cerrá MediaDownloader antes de actualizar.")
 
 
+def online_repair(root, folder, progress):
+    """Use the current helper even when the installed helper cannot update itself."""
+    import threading
+    from . import update_channel
+    root = Path(root).resolve()
+    installed = read_manifest((root / MANIFEST).read_bytes())
+    cancel = threading.Event()
+    emit_progress(progress, -1, 'Consultando el parche de reparación en GitHub…')
+    info = update_channel.check(update_channel.DEFAULT_CHANNEL, installed['version'], cancel)
+    if info['up_to_date']:
+        raise UpdateError('Esta instalación ya tiene la última versión. Abrí MediaDownloader para comprobarla.')
+    archive = update_channel.download(info, folder, cancel, progress)
+    try:
+        manifest = validate_package(archive, root, progress=progress)
+        if (manifest['schema'] != 2 or manifest['base'] != installed
+                or manifest['version'] != info['available']):
+            raise UpdateError('El parche no coincide con la instalación elegida y el canal.')
+        return archive, manifest
+    except BaseException:
+        archive.unlink(missing_ok=True)
+        raise
+
+
 def helper_main(argv=None):
     if os.name == 'nt' and not (sys.argv[1:] if argv is None else argv):
         # One-time repair for releases whose nested confirmation loop lost the
         # pending installation. It invokes this SAME transactional updater.
         from .install_progress import choose_file
         ctypes.windll.user32.MessageBoxW(None,
-            'Cerrá MediaDownloader. Luego elegí su MediaDownloader.exe y el ZIP del parche. Tus datos se conservan.',
+            'Cerrá MediaDownloader y elegí el MediaDownloader.exe que usás. Se descargará y verificará el parche desde GitHub. Tus datos se conservan.',
             APPLICATION, 0x40)
         executable = choose_file('Elegí el MediaDownloader.exe que usás', 'MediaDownloader.exe\0MediaDownloader.exe\0\0')
         if executable is None: return 0
         if executable.name.lower() != 'mediadownloader.exe': return 1
-        archive = choose_file('Elegí el ZIP de actualización sin descomprimir', 'Actualización ZIP\0*.zip\0\0')
-        if archive is None: return 0
-        if ctypes.windll.user32.MessageBoxW(None, '¿Aplicar el parche elegido y reiniciar MediaDownloader?', APPLICATION, 0x24) != 6:
-            return 0
-        argv = ['--root', str(executable.parent), '--zip', str(archive)]
+        argv = ['--root', str(executable.parent), '--online']
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--zip", type=Path)
     parser.add_argument("--restore", action="store_true")
+    parser.add_argument("--online", action="store_true")
     parser.add_argument("--parent", type=int, default=0)
     parser.add_argument("--progress-report", type=Path)
     parser.add_argument("--no-relaunch", action="store_true", help="Validación automatizada: no abrir ventanas ni reiniciar al terminar")
@@ -620,6 +685,8 @@ def helper_main(argv=None):
             forwarded += ["--zip", str(args.zip.resolve())]
         if args.restore:
             forwarded += ["--restore"]
+        if args.online:
+            forwarded += ["--online"]
         if args.no_relaunch:
             forwarded += ["--no-relaunch"]
         subprocess.Popen([str(helper), *forwarded], cwd=temp)
@@ -632,8 +699,19 @@ def helper_main(argv=None):
         if window:
             window(value, message)
     outcome = None
+    online_folder = None
     try:
         wait_parent(args.parent, progress=progress)
+        if args.online:
+            if args.zip or args.restore:
+                raise UpdateError('La reparación online no admite otro paquete ni recuperación simultánea.')
+            online_folder = tempfile.TemporaryDirectory(prefix='MediaDownloader-repair-')
+            args.zip, manifest = online_repair(root, online_folder.name, progress)
+            if os.name == 'nt' and not args.no_relaunch:
+                if ctypes.windll.user32.MessageBoxW(None,
+                        f"Parche verificado a {manifest['version']}. ¿Instalar y reiniciar MediaDownloader?",
+                        APPLICATION, 0x24) != 6:
+                    return 0
         outcome = apply_update(root, args.zip, args.restore, progress=progress)
         if not args.no_relaunch:
             progress(-1, 'Abriendo MediaDownloader actualizado…')
@@ -648,12 +726,13 @@ def helper_main(argv=None):
         else:
             message = str(error) if isinstance(error, UpdateError) else (
                 "No se pudo completar la actualización. Revisá los permisos, el espacio libre y que el programa esté cerrado. "
-                f"Conservá las carpetas actual y .previous. Detalle: {type(error).__name__}.")
+                f"Conservá las carpetas actual y .previous.\nEtapa: {phase}\nDetalle: {error}")
         try:
             log.write_text(message + f'\n\nEtapa: {phase}\nResultado: {outcome or "sin confirmar"}\n'
                            + traceback.format_exc(), encoding="utf-8")
         except OSError:
             pass
+        message += '\n\nRegistro del error: ' + str(log)
         if os.name == "nt" and not args.no_relaunch:
             ctypes.windll.user32.MessageBoxW(None, message, APPLICATION, 0x10)
         if not args.no_relaunch and outcome is None and (root / "MediaDownloader.exe").exists():
@@ -663,5 +742,7 @@ def helper_main(argv=None):
                 pass
         return 1
     finally:
+        if online_folder:
+            online_folder.cleanup()
         if window:
             window.close()

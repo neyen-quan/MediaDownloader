@@ -1,5 +1,9 @@
 # Verificación y aceptación
 
+## Intento 1.0.13 → 1.0.14
+
+El usuario corrigió la observación anterior: la instalación sigue en 1.0.13. Las destacadas funcionan en esa versión, lo que no acredita haber instalado 1.0.14. La captura ubica el error en la preparación de respaldo. No hay traceback local disponible y no se ha identificado el archivo exacto. 1.0.15 prueba fallos reproducibles de preparación con respaldos de solo lectura en Windows, temporales antiguos, helper entrante verificado, reparación online y diagnóstico de archivo/etapa. Su aceptación en esa PC queda pendiente.
+
 ## Incidencia de finalización observada en 1.0.13
 
 El usuario mostró un aviso PermissionError del actualizador y luego la ventana de MediaDownloader 1.0.13 abierta. Esto acredita el arranque de esa versión, pero no identifica el archivo bloqueado ni confirma todavía la descarga real de destacadas o la conservación completa de datos.
