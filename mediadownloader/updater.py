@@ -727,6 +727,13 @@ def helper_main(argv=None):
             message = str(error) if isinstance(error, UpdateError) else (
                 "No se pudo completar la actualización. Revisá los permisos, el espacio libre y que el programa esté cerrado. "
                 f"Conservá las carpetas actual y .previous.\nEtapa: {phase}\nDetalle: {error}")
+        filesystem_error = error.__cause__ if isinstance(error.__cause__, OSError) else error
+        # OSError.__str__ uses repr(filename), doubling backslashes on Windows.
+        # Show paths verbatim so the user can locate the blocked file directly.
+        for field, label in [('filename', 'Archivo'), ('filename2', 'Destino'), ('winerror', 'Código Windows')]:
+            value = getattr(filesystem_error, field, None)
+            if value is not None:
+                message += f'\n{label}: {value}'
         try:
             log.write_text(message + f'\n\nEtapa: {phase}\nResultado: {outcome or "sin confirmar"}\n'
                            + traceback.format_exc(), encoding="utf-8")
