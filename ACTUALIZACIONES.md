@@ -36,3 +36,11 @@ Recuperación: ejecutar el workflow actual desde main mediante workflow_dispatch
 La descarga muestra porcentaje, MiB recibidos, tiempo y falta de avance. La verificación tiene progreso por etapa y la instalación abre una ventana nativa que permanece visible hasta el reinicio o el error/recuperación.
 
 Las versiones 1.0.8/1.0.9 podían perder la instalación pendiente si el hilo terminaba mientras se confirmaba. Si no reinician después de confirmar, cerrar el programa y abrir el asset `MediaDownloader-Repararactualizador.exe` de la release 1.0.10. Elegir el MediaDownloader.exe instalado y el ZIP incremental correspondiente a su versión, confirmar y esperar. Es el mismo instalador, con verificación, respaldo y recuperación; no un segundo mecanismo de actualización. Usar solo el EXE y los ZIPs publicados en el repositorio oficial.
+
+## Finalización desde 1.0.14
+
+Las versiones anteriores podían mostrar PermissionError tras instalar y comprobar el arranque, al eliminar un respaldo antiguo o intentar reiniciar el programa. El mensaje genérico no identificaba la operación y podía contradecir la versión que luego abría.
+
+El actualizador registra ahora una fase committed después de comprobar el arranque. La limpieza posterior es opcional: los bloqueos temporales se reintentan, un respaldo pendiente conserva su manifiesto y la próxima ejecución vuelve a limpiarlo sin deshacer una instalación confirmada. Una falla anterior a la confirmación conserva la recuperación transaccional. No se borran carpetas desconocidas: incluso un respaldo parcialmente limpiado debe identificarse mediante un manifiesto válido del producto, salvo un directorio ya vacío.
+
+Los registros de fallos incluyen la etapa y la excepción con archivo/código de Windows cuando esté disponible. Se guardan localmente y no se suben al repositorio. La imposibilidad de volver a abrir el EXE después de instalar se comunica como tal, sin afirmar que falló el reemplazo de archivos.

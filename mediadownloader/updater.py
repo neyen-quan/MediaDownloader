@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
@@ -44,6 +45,21 @@ def emit_progress(progress, value, message, cancel=None):
         raise UpdateError('Operación cancelada.')
     if progress:
         progress(value, message)
+
+
+def retry_filesystem(action, progress=None, message='Esperando que Windows libere los archivos…', timeout=3):
+    """Retry temporary sharing/access violations without hiding persistent failures."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return action()
+        except OSError as error:
+            if not (isinstance(error, PermissionError) or getattr(error, 'winerror', None) in (5, 32, 33)):
+                raise
+            if time.monotonic() >= deadline:
+                raise
+            emit_progress(progress, -1, message)
+            time.sleep(0.1)
 
 
 def safe_name(name):
@@ -287,13 +303,48 @@ def materialize_delta(root, stage, manifest, progress=None, cancel=None):
     (stage / MANIFEST).write_text(json.dumps(target), encoding="utf-8")
 
 
-def check_backup_path(path):
+def check_backup_path(path, partial=False):
     if path.exists() or path.is_symlink():
-        if path.is_symlink() or not path.is_dir() or not all(
+        if path.is_symlink() or not path.is_dir():
+            raise UpdateError(f"La carpeta reservada {path.name} contiene datos ajenos al programa. Movela antes de actualizar.")
+        identified = False
+        if (path / MANIFEST).exists():
+            identified = read_manifest((path / MANIFEST).read_bytes())['schema'] == 1
+        if not (partial and (identified or not any(path.iterdir()))) and not all(
                 (path / name).is_file() for name in ("MediaDownloader.exe", "MediaDownloaderUpdater.exe")):
             raise UpdateError(f"La carpeta reservada {path.name} contiene datos ajenos al programa. Movela antes de actualizar.")
-        if (path / MANIFEST).exists():
-            read_manifest((path / MANIFEST).read_bytes())
+
+
+def remove_old_backup(path):
+    """Keep the product manifest until last so an interrupted cleanup is identifiable."""
+    if not path.exists():
+        return
+    check_backup_path(path, partial=True)
+    for entry in path.iterdir():
+        if entry.name == MANIFEST:
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+    (path / MANIFEST).unlink(missing_ok=True)
+    path.rmdir()
+
+
+def finish_committed_update(root, progress=None):
+    """Optional cleanup can never turn an already healthy installation into failure."""
+    _, state = locations(root)
+    older = root.parent / (root.name + '.older')
+    try:
+        emit_progress(progress, -1, 'Finalizando la actualización y limpiando el respaldo antiguo…')
+        retry_filesystem(lambda: remove_old_backup(older), progress)
+        retry_filesystem(lambda: state.unlink(missing_ok=True), progress)
+        return True
+    except (OSError, UpdateError):
+        # Keep the committed journal. A later update retries cleanup and MUST NOT
+        # interpret this as an interrupted swap or revert the healthy version.
+        emit_progress(progress, 100, 'Actualización instalada. La limpieza del respaldo antiguo queda pendiente.')
+        return False
 
 
 def journal(path, state):
@@ -302,7 +353,7 @@ def journal(path, state):
         json.dump(state, f)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(temporary, path)
+    retry_filesystem(lambda: os.replace(temporary, path))
 
 
 @contextmanager
@@ -323,10 +374,13 @@ def update_lock(root):
             yield
         finally:
             if os.name == "nt":
-                f.seek(0); msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                try:
+                    f.seek(0); msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                except OSError:
+                    pass  # Closing the descriptor releases the lock regardless.
 
 
-def recover_interrupted(root):
+def recover_interrupted(root, progress=None):
     """Only our own deterministic sibling paths are accepted, never paths from JSON."""
     backup, state = locations(root)
     older = root.parent / (root.name + ".older")
@@ -336,10 +390,14 @@ def recover_interrupted(root):
         phase = json.loads(state.read_text(encoding="utf-8"))["phase"]
     except (OSError, ValueError, KeyError):
         raise UpdateError("El registro de actualización está dañado; conservá las carpetas actual y .previous.") from None
+    if phase == 'committed' and root.exists():
+        check_backup_path(root)
+        finish_committed_update(root, progress)
+        return False
     if phase in {"prepared", "moving"} and root.exists():
         if older.exists() and not backup.exists():
-            older.rename(backup)
-        state.unlink()
+            retry_filesystem(lambda: older.rename(backup), progress)
+        retry_filesystem(state.unlink, progress)
         return False
     if backup.exists():
         failed = root.parent / (root.name + ".failed")
@@ -347,12 +405,12 @@ def recover_interrupted(root):
         check_backup_path(failed)
         if root.exists():
             if failed.exists():
-                shutil.rmtree(failed)
-            root.rename(failed)
-        backup.rename(root)
+                retry_filesystem(lambda: shutil.rmtree(failed), progress)
+            retry_filesystem(lambda: root.rename(failed), progress)
+        retry_filesystem(lambda: backup.rename(root), progress)
         if older.exists():
-            older.rename(backup)
-        state.unlink()
+            retry_filesystem(lambda: older.rename(backup), progress)
+        retry_filesystem(state.unlink, progress)
         return True
     raise UpdateError("La actualización quedó interrumpida y no se encontró la copia anterior.")
 
@@ -363,7 +421,9 @@ def smoke(root, progress=None):
         manifest = read_manifest((root / MANIFEST).read_bytes())
         if re.fullmatch(r'\d+\.\d+\.\d+', manifest['version']):
             args += ['--expected-version', manifest['version']]
-        process = subprocess.Popen(args, cwd=root, creationflags=0x08000000 if os.name == 'nt' else 0)
+        process = retry_filesystem(lambda: subprocess.Popen(args, cwd=root,
+            creationflags=0x08000000 if os.name == 'nt' else 0), progress,
+            'Esperando que Windows permita comprobar el arranque…')
         started = time.monotonic()
         while process.poll() is None:
             emit_progress(progress, -1, 'Comprobando el arranque de la nueva versión…')
@@ -409,8 +469,8 @@ def apply_update(root, archive=None, restore=False, health=smoke, progress=None)
     emit_progress(progress, -1, 'Preparando actualización y recuperación…')
     with update_lock(root):
         check_backup_path(backup)
-        check_backup_path(root.parent / (root.name + ".older"))
-        if recover_interrupted(root):
+        check_backup_path(root.parent / (root.name + ".older"), partial=True)
+        if recover_interrupted(root, progress):
             return "recovered"
         if not (root / "MediaDownloader.exe").is_file():
             raise UpdateError("No se encontró la instalación portable de MediaDownloader.")
@@ -432,39 +492,42 @@ def apply_update(root, archive=None, restore=False, health=smoke, progress=None)
             preserve_user_files(root, stage)
             journal(state, {"phase": "prepared"})
             if older.exists():
-                shutil.rmtree(older)
+                retry_filesystem(lambda: remove_old_backup(older), progress)
             if backup.exists():
-                backup.rename(older)
+                retry_filesystem(lambda: backup.rename(older), progress)
             # Journal precedes both moves: crash recovery covers either move boundary.
             journal(state, {"phase": "moving"})
             try:
                 emit_progress(progress, -1, 'Respaldando la versión actual…')
-                root.rename(backup)
+                retry_filesystem(lambda: root.rename(backup), progress)
                 journal(state, {"phase": "swapping"})
                 emit_progress(progress, -1, 'Instalando la nueva versión…')
-                stage.rename(root)
+                retry_filesystem(lambda: stage.rename(root), progress)
                 emit_progress(progress, -1, 'Comprobando el arranque de la nueva versión…')
                 healthy = smoke(root, progress) if health is smoke else health(root)
                 if not healthy:
                     raise UpdateError("La nueva versión no pudo arrancar. Se recuperó la versión anterior.")
+                emit_progress(progress, -1, 'Confirmando la instalación verificada…')
+                journal(state, {"phase": "committed"})
             except BaseException:
                 emit_progress(progress, -1, 'Recuperando la copia anterior…')
                 if backup.exists():
                     if root.exists():
-                        shutil.rmtree(root)
-                    backup.rename(root)
+                        retry_filesystem(lambda: shutil.rmtree(root), progress)
+                    retry_filesystem(lambda: backup.rename(root), progress)
                 if older.exists():
-                    older.rename(backup)
-                state.unlink(missing_ok=True)
+                    retry_filesystem(lambda: older.rename(backup), progress)
+                retry_filesystem(lambda: state.unlink(missing_ok=True), progress)
                 raise
-            state.unlink(missing_ok=True)
-            if older.exists():
-                shutil.rmtree(older)
+            finish_committed_update(root, progress)
             emit_progress(progress, 100, 'Actualización completada. Reiniciando MediaDownloader…')
             return "restored" if restore else "updated"
         finally:
             if stage.exists():
-                shutil.rmtree(stage)
+                try:
+                    shutil.rmtree(stage)
+                except OSError:
+                    pass  # A temporary-directory cleanup must not mask the result.
 
 
 def wait_parent(pid, timeout=90, progress=None):
@@ -562,26 +625,42 @@ def helper_main(argv=None):
         subprocess.Popen([str(helper), *forwarded], cwd=temp)
         return 0
     window = ProgressWindow(root) if os.name == 'nt' and not args.no_relaunch else None
-    progress = window if window else None
+    phase = 'Preparando actualización'
+    def progress(value, message):
+        nonlocal phase
+        phase = message
+        if window:
+            window(value, message)
+    outcome = None
     try:
         wait_parent(args.parent, progress=progress)
-        apply_update(root, args.zip, args.restore, progress=progress)
+        outcome = apply_update(root, args.zip, args.restore, progress=progress)
         if not args.no_relaunch:
-            subprocess.Popen([str(root / "MediaDownloader.exe")], cwd=root)
+            progress(-1, 'Abriendo MediaDownloader actualizado…')
+            retry_filesystem(lambda: subprocess.Popen([str(root / "MediaDownloader.exe")], cwd=root), progress)
         return 0
     except Exception as error:
         log = root.parent / (root.name + ".update-error.txt")
-        message = str(error) if isinstance(error, UpdateError) else (
-            "No se pudo aplicar la actualización. Revisá los permisos, el espacio libre y que el programa esté cerrado. "
-            f"La copia anterior se conserva. Detalle: {type(error).__name__}.")
+        if outcome is not None:
+            message = ("La instalación terminó, pero Windows no permitió abrir MediaDownloader automáticamente. "
+                       "Abrí MediaDownloader.exe desde su carpeta. "
+                       f"Detalle: {type(error).__name__}.")
+        else:
+            message = str(error) if isinstance(error, UpdateError) else (
+                "No se pudo completar la actualización. Revisá los permisos, el espacio libre y que el programa esté cerrado. "
+                f"Conservá las carpetas actual y .previous. Detalle: {type(error).__name__}.")
         try:
-            log.write_text(message, encoding="utf-8")
+            log.write_text(message + f'\n\nEtapa: {phase}\nResultado: {outcome or "sin confirmar"}\n'
+                           + traceback.format_exc(), encoding="utf-8")
         except OSError:
             pass
         if os.name == "nt" and not args.no_relaunch:
             ctypes.windll.user32.MessageBoxW(None, message, APPLICATION, 0x10)
-        if not args.no_relaunch and (root / "MediaDownloader.exe").exists():
-            subprocess.Popen([str(root / "MediaDownloader.exe")], cwd=root)
+        if not args.no_relaunch and outcome is None and (root / "MediaDownloader.exe").exists():
+            try:
+                retry_filesystem(lambda: subprocess.Popen([str(root / "MediaDownloader.exe")], cwd=root), progress)
+            except OSError:
+                pass
         return 1
     finally:
         if window:

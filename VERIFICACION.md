@@ -1,5 +1,11 @@
 # Verificación y aceptación
 
+## Incidencia de finalización observada en 1.0.13
+
+El usuario mostró un aviso PermissionError del actualizador y luego la ventana de MediaDownloader 1.0.13 abierta. Esto acredita el arranque de esa versión, pero no identifica el archivo bloqueado ni confirma todavía la descarga real de destacadas o la conservación completa de datos.
+
+Se reprodujo en pruebas el caso de una instalación aplicada y verificada cuyo helper informa fracaso al no poder borrar el respaldo antiguo. El aviso de las versiones anteriores solo guardaba el tipo de excepción y no permite atribuir con certeza la captura a una operación concreta. La corrección 1.0.14 separa confirmación, limpieza y apertura final, conserva el estado confirmado y mejora el diagnóstico. La prueba de aceptación en la PC sigue siendo necesaria.
+
 La versión 1.0.7 publicada es la base existente con instalador incremental. La 1.0.8 agrega consulta de canal y descarga online reutilizando ese instalador.
 
 ## Evidencia automatizada

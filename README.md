@@ -28,6 +28,8 @@ El canal solo admite HTTPS de GitHub y redirecciones a sus hosts de archivos; no
 
 Se reutiliza un único actualizador: prepara una instalación en staging con los archivos locales sin cambios y el payload incremental, verifica el resultado y realiza un intercambio transaccional. Conserva una copia `.previous`, prueba el arranque y revierte si falla. **Recuperar versión anterior**, o `Recuperar version anterior.cmd` si la interfaz no abre. No mover carpetas durante el proceso. Se requiere espacio local para temporales y respaldo aunque el ZIP descargado sea pequeño.
 
+Desde 1.0.14, una instalación que pasó la prueba de arranque queda confirmada antes de limpiar respaldos antiguos. Si Windows bloquea esa limpieza, se reintenta y queda pendiente sin informar que falló la instalación ni revertir la versión nueva. Los fallos reales generan un registro local `NOMBRE.update-error.txt`, junto a la carpeta del programa, con etapa, resultado y detalle técnico. Si solo falla la apertura automática después de instalar, el mensaje lo distingue y permite abrir el EXE manualmente.
+
 Se conservan configuración, sesión, descargas, nombre/ruta del ejecutable, icono y AppUserModelID de Windows. Los accesos y anclados existentes siguen apuntando a la misma ubicación. Las pruebas automáticas de Shell no sustituyen la comprobación del anclado en la PC del usuario.
 
 SHA-256 verifica integridad, no una firma del editor; no hay Authenticode. Usar un canal confiable.
