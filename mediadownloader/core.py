@@ -37,8 +37,13 @@ def public_url(value: str) -> tuple[str, str]:
     except ValueError:
         raise UserError("Pegá un enlace HTTPS público de Instagram o TikTok.") from None
     if host in {"instagram.com", "www.instagram.com", "m.instagram.com"}:
-        if not re.match(r"^/(p|reel|reels|tv)/[A-Za-z0-9_-]+/?$", u.path):
-            raise UserError("Usá el enlace de una publicación, reel o carrusel de Instagram.")
+        post = re.fullmatch(r"/(p|reel|reels|tv)/[A-Za-z0-9_-]+/?", u.path)
+        story = re.fullmatch(r"/stories/([A-Za-z0-9_.]{1,30})(?:/[0-9]+)?/?", u.path)
+        if not post and not (story and story[1].lower() not in {"me", "highlights"}):
+            raise UserError("Usá el enlace de una publicación, reel, carrusel o historia de Instagram.")
+        # The story extractor recognizes the canonical desktop host only.
+        if story:
+            host = "www.instagram.com"
         platform = "instagram"
     elif host in {"www.tiktok.com", "tiktok.com", "m.tiktok.com", "vm.tiktok.com", "vt.tiktok.com"}:
         if not u.path.strip("/"):

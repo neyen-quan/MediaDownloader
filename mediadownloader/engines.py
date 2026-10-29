@@ -81,15 +81,18 @@ def gallery_items(raw, source):
     result = []
     expected = 0
     received = 0
+    story = urlsplit(source).path.startswith("/stories/")
     for message in json.loads(raw):
         if isinstance(message, list) and len(message) == 2 and message[0] == -1:
-            error = str(message[1].get("message", "")).lower()
+            error = (str(message[1].get("error", "")) + " " + str(message[1].get("message", ""))).lower()
             if "proxy" in error or "tunnel" in error:
                 raise UserError("La red o el proxy bloqueó el acceso a Instagram. Revisá los destinos permitidos o la conexión de esta PC.")
-            if any(term in error for term in ("login", "401", "403", "challenge", "sign in")):
+            if any(term in error for term in ("login", "401", "403", "challenge", "sign in", "authentication", "authorization", "cookies")):
                 raise UserError("Instagram pidió iniciar sesión o rechazó la sesión importada. Renová las cookies locales e intentá otra vez.")
             if "429" in error or "rate limit" in error:
                 raise UserError("Instagram limitó temporalmente las consultas. Esperá antes de volver a analizar.")
+            if story and any(term in error for term in ("notfound", "not found", "404")):
+                raise UserError("La historia ya no está disponible o tu cuenta no puede verla. Comprobá el enlace en Instagram con la misma cuenta.")
             raise UserError("Instagram no permitió analizar toda la publicación. Puede requerir una sesión local o una actualización del motor.")
         if isinstance(message, list) and message and message[0] == 2:
             meta = message[-1]
@@ -118,6 +121,8 @@ def gallery_items(raw, source):
                             engine, source, meta.get("display_url", ""),
                             str(meta.get("description", ""))[:200], manifest=manifest))
     if not result:
+        if story:
+            raise UserError("No hay historias disponibles para ese enlace. Pueden haber vencido, haber sido eliminadas o no ser visibles para tu cuenta.")
         raise UserError("Instagram no entregó archivos. Puede exigir iniciar sesión incluso para publicaciones públicas.")
     if expected and received != expected:
         raise UserError(f"Instagram devolvió el contenido incompleto: {received} de {expected} archivos, incluida su pista musical si existe. Probá más tarde o renová la sesión local.")
@@ -142,9 +147,17 @@ def ytdlp_items(raw, source):
 def analyze(value, cookies, cancel, progress):
     platform, source = public_url(value)
     progress(0, "Consultando directamente a la plataforma…")
-    if cookies:
-        validate_cookies(cookies)
+    jar = validate_cookies(cookies) if cookies else None
     if platform == "instagram":
+        if urlsplit(source).path.startswith("/stories/"):
+            if jar is None or not any(
+                cookie.name == "sessionid" and cookie.value
+                # Netscape exports use 0 or a blank expiry for session cookies.
+                and (cookie.expires in (None, 0) or not cookie.is_expired())
+                and cookie.domain.lstrip(".").lower() == "instagram.com" for cookie in jar
+            ):
+                raise UserError("Para descargar historias, importá una sesión vigente de Instagram desde ‘Sesión local’. Usá una cuenta que pueda ver esa historia.")
+            progress(0, "Consultando historias disponibles con tu sesión local…")
         args = ["--ignore-config", "--no-input", "--dump-json", "-o", "extractor.instagram.videos=true",
                 "-o", "output.private=true",
                 "-o", "extractor.instagram.previews=false", "-o", "extractor.instagram.audio=true",

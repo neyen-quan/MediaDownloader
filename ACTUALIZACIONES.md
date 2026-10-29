@@ -27,6 +27,8 @@ El flujo normal es Actualizar programa → Buscar actualizaciones → Descargar 
 
 Un commit en main con una versión nueva inicia el workflow. El mismo número con tag existente no vuelve a publicar. La release se prepara como borrador con todos sus archivos, se descargan y verifican hashes y luego se publica latest.json como canal estable. El paquete completo permanece separado.
 
+Desde 1.0.12, el pipeline genera y comprueba parches directos desde las dos versiones estables anteriores que admiten el canal online. Cada base se descarga desde su ZIP publicado exacto; su actualizador instalado aplica el parche y el nuevo comprueba la recuperación. Para 1.0.12 se cubren 1.0.10 y 1.0.11 sin instalar el paquete completo.
+
 Recuperación: ejecutar el workflow actual desde main mediante workflow_dispatch y release_tag. El código corresponde al tag; las herramientas de compilación/publicación se toman de main, evitando repetir un workflow obsoleto. Una release completa existente se verifica y no se sobrescribe. Una release incompleta puede completarse sin crear otra con el mismo tag.
 
 ## Progreso y desbloqueo desde 1.0.10

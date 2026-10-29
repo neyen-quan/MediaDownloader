@@ -63,23 +63,43 @@ def build():
             assert sha256(baseline / name) == digest, name
         output.with_suffix('.zip.sha256').write_text(f'{sha256(output)}  {output.name}\n', encoding='ascii')
         write_channel(base['version'], output)
-        if __version__ == '1.0.10' and base['version'] != '1.0.8':
+        # Keep direct online updates available to the two preceding releases.
+        # Each baseline is downloaded verbatim, never recreated from source.
+        releases = json.loads(gh('release', 'list', '--limit', '50', '--json', 'tagName,isDraft,isPrerelease'))
+        versions = []
+        for release in releases:
+            if release['isDraft'] or release['isPrerelease']:
+                continue
+            try:
+                parts = tuple(map(int, release['tagName'].removeprefix('v').split('.')))
+            except ValueError:
+                continue
+            if len(parts) == 3 and (1, 0, 8) <= parts < tuple(map(int, __version__.split('.'))):
+                versions.append(parts)
+        for parts in sorted(set(versions), reverse=True)[:2]:
+            older_version = '.'.join(map(str, parts))
+            if older_version == base['version']:
+                continue
             with tempfile.TemporaryDirectory() as older_dir:
-                gh('release', 'download', 'v1.0.8', '--pattern', '*-Windows-x64.zip', '--dir', older_dir)
+                gh('release', 'download', 'v' + older_version, '--pattern', '*-Windows-x64.zip', '--dir', older_dir)
                 older_root = Path(older_dir) / 'base'
                 older_manifest = extract_package(next(Path(older_dir).glob('*-Windows-x64.zip')), older_root)
-                extra = ROOT / 'dist' / f'MediaDownloader-{__version__}-from-1.0.8-patch.zip'
+                extra = ROOT / 'dist' / f'MediaDownloader-{__version__}-from-{older_version}-patch.zip'
                 build_delta(older_root, ROOT / 'dist/MediaDownloader', extra, __version__)
                 extra_helper = Path(older_dir) / 'updater.exe'
-                shutil.copy2(ROOT / 'dist/MediaDownloader/MediaDownloaderUpdater.exe', extra_helper)
+                shutil.copy2(older_root / 'MediaDownloaderUpdater.exe', extra_helper)
                 subprocess.run([str(extra_helper), '--root', str(older_root), '--zip', str(extra), '--no-relaunch'], check=True, timeout=300)
                 for name, digest in patch['target']['files'].items():
+                    assert sha256(older_root / name) == digest, name
+                shutil.copy2(older_root / 'MediaDownloaderUpdater.exe', extra_helper)
+                subprocess.run([str(extra_helper), '--root', str(older_root), '--restore', '--no-relaunch'], check=True, timeout=300)
+                for name, digest in older_manifest['files'].items():
                     assert sha256(older_root / name) == digest, name
                 extra.with_suffix('.zip.sha256').write_text(f'{sha256(extra)}  {extra.name}\n', encoding='ascii')
                 feed_path = ROOT / 'dist/latest.json'
                 feed = json.loads(feed_path.read_text())
                 repo = os.environ.get('GITHUB_REPOSITORY', 'neyen-quan/MediaDownloader')
-                feed['patches'].append({'from':'1.0.8','to':__version__, 'url':f'https://github.com/{repo}/releases/download/v{__version__}/{extra.name}', 'sha256':sha256(extra),'size':extra.stat().st_size})
+                feed['patches'].append({'from':older_version,'to':__version__, 'url':f'https://github.com/{repo}/releases/download/v{__version__}/{extra.name}', 'sha256':sha256(extra),'size':extra.stat().st_size})
                 feed_path.write_text(json.dumps(feed, indent=2), encoding='utf-8')
 
         # HTTPS transfer is exercised against a controlled server; the same channel

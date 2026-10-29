@@ -134,7 +134,7 @@ class Window(QMainWindow):
         row.setSpacing(8)
         row.addWidget(label("Enlace"))
         self.url = QLineEdit()
-        self.url.setPlaceholderText("Pegá un enlace de Instagram o TikTok…")
+        self.url.setPlaceholderText("Instagram: post, reel o historia · TikTok…")
         self.url.setMinimumWidth(130)
         self.url.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.url.setClearButtonEnabled(True)

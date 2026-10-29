@@ -1,6 +1,6 @@
 # MediaDownloader
 
-Aplicación portable Windows 10/11 x64, en español, para fotos, carruseles, reels de Instagram y videos TikTok. Python 3.12 + PySide6/Qt; motores locales gallery-dl y yt-dlp, FFmpeg/FFprobe incluidos. No usa sitios de descarga intermediarios ni depende técnicamente de PhotoBatch.
+Aplicación portable Windows 10/11 x64, en español, para fotos, carruseles, reels e historias de Instagram y videos TikTok. Python 3.12 + PySide6/Qt; motores locales gallery-dl y yt-dlp, FFmpeg/FFprobe incluidos. No usa sitios de descarga intermediarios ni depende técnicamente de PhotoBatch.
 
 ## Instalar y actualizar
 
@@ -19,6 +19,8 @@ Los parches identifican la versión base. Si no hay un parche directo, el progra
 Pegar enlace público → Analizar → elegir elementos → guardar visible/selección/todos/ZIP. Previsualizaciones automáticas, miniaturas compactas, visor vertical y zoom para fotos. Los originales se guardan sin recomprimir; FFmpeg combina audio/video sin recodificar y puede producir MKV.
 
 Configuración, canal y sesión opcional viven en `%LOCALAPPDATA%/MediaDownloader`; las descargas quedan en la carpeta elegida. La sesión se importa desde un cookies.txt Netscape local. Nunca subir ese archivo al repositorio ni compartirlo. Las plataformas pueden exigir sesión, limitar consultas o cambiar sus motores.
+
+Historias desde 1.0.12: pegar `https://www.instagram.com/stories/USUARIO/ID/` para una historia puntual, o `https://www.instagram.com/stories/USUARIO/` para sus historias activas. Requieren una sesión vigente importada desde **Sesión local**, de una cuenta que pueda ver el contenido. Se usa la misma lista, previsualización automática, selección y descarga individual o ZIP. Los enlaces compartidos conservan el ID y eliminan el seguimiento. No se recuperan historias vencidas o eliminadas, ni se evitan restricciones de acceso. Las destacadas y los enlaces abreviados `/s/` no se incluyen en esta entrega. La descarga real con Instagram debe comprobarse con una historia disponible y la sesión local del usuario; las pruebas automáticas no usan cuentas personales.
 
 ## Integridad y recuperación
 

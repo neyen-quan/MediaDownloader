@@ -103,6 +103,7 @@ def test_future_release_pipeline_builds_and_checks_small_patch(tmp_path, monkeyp
         else:
             apply_update(installed, args[args.index('--zip') + 1], health=lambda _: True)
     monkeypatch.setattr(delta_release.subprocess, 'run', run)
+    monkeypatch.setattr(delta_release, 'gh', lambda *args: '[]')
     monkeypatch.delenv('GITHUB_STEP_SUMMARY', raising=False)
     build_package(project / 'dist/MediaDownloader', project / 'dist/MediaDownloader-1.0.8-Windows-x64.zip', '1.0.8')
     delta_release.build()
@@ -111,6 +112,54 @@ def test_future_release_pipeline_builds_and_checks_small_patch(tmp_path, monkeyp
     with zipfile.ZipFile(output) as z:
         assert '_internal/dependency.dll' not in z.namelist()
     assert validate_package(output)['base']['version'] == '1.0.7'
+
+
+def test_release_builds_direct_patches_from_two_latest_exact_published_bases(tmp_path, monkeypatch):
+    from pathlib import Path
+    from tools import delta_release
+    root, target, _, _ = setup_delta(tmp_path)
+    project = tmp_path / 'project'
+    baseline_zip = tmp_path / 'base-1.0.11.zip'
+    build_package(root, baseline_zip, '1.0.11')
+    extract_package(baseline_zip, project / 'build/patch-base')
+    older_zip = tmp_path / 'base-1.0.10.zip'
+    (root / 'MediaDownloader.exe').write_bytes(b'older exact published bytes')
+    build_package(root, older_zip, '1.0.10')
+    shutil.copytree(target, project / 'dist/MediaDownloader')
+    build_package(project / 'dist/MediaDownloader', project / 'dist/MediaDownloader-1.0.12-Windows-x64.zip', '1.0.12')
+    monkeypatch.setattr(delta_release, 'ROOT', project)
+    monkeypatch.setattr(delta_release, '__version__', '1.0.12')
+    monkeypatch.delenv('GITHUB_STEP_SUMMARY', raising=False)
+    downloads = []
+    applied = []
+    def gh(*args):
+        if args[:2] == ('release', 'list'):
+            return json.dumps([{'tagName': tag, 'isDraft': draft, 'isPrerelease': pre}
+                for tag, draft, pre in [('v1.0.9', False, False), ('v1.0.10', False, False),
+                    ('v1.0.12', True, False), ('v9.0.0', False, True), ('v1.0.11', False, False)]])
+        assert args[:3] == ('release', 'download', 'v1.0.10')
+        downloads.append(args[2])
+        shutil.copy2(older_zip, Path(args[args.index('--dir') + 1]) / 'MediaDownloader-1.0.10-Windows-x64.zip')
+        return ''
+    def run(args, **kwargs):
+        installed = Path(args[args.index('--root') + 1])
+        if '--restore' in args:
+            apply_update(installed, restore=True, health=lambda _: True)
+        else:
+            applied.append(json.loads((installed / MANIFEST).read_text())['version'])
+            apply_update(installed, args[args.index('--zip') + 1], health=lambda _: True)
+    monkeypatch.setattr(delta_release, 'gh', gh)
+    monkeypatch.setattr(delta_release.subprocess, 'run', run)
+    delta_release.build()
+    feed = json.loads((project / 'dist/latest.json').read_text())
+    assert [p['from'] for p in feed['patches']] == ['1.0.11', '1.0.10']
+    assert applied == ['1.0.11', '1.0.10'] and downloads == ['v1.0.10']
+    for entry in feed['patches']:
+        archive = project / 'dist' / entry['url'].rsplit('/', 1)[1]
+        assert sha256(archive) == entry['sha256'] and archive.stat().st_size == entry['size']
+        manifest = validate_package(archive)
+        assert manifest['base']['version'] == entry['from'] and manifest['version'] == '1.0.12'
+        assert '_internal/dependency.dll' not in manifest['files']
 
 
 
