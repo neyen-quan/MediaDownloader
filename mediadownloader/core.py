@@ -36,14 +36,19 @@ def public_url(value: str) -> tuple[str, str]:
             raise ValueError()
     except ValueError:
         raise UserError("Pegá un enlace HTTPS público de Instagram o TikTok.") from None
+    path = u.path
     if host in {"instagram.com", "www.instagram.com", "m.instagram.com"}:
-        post = re.fullmatch(r"/(p|reel|reels|tv)/[A-Za-z0-9_-]+/?", u.path)
+        post = re.fullmatch(r"/(?:[A-Za-z0-9_.]{1,30}/)?(p|reel|reels|tv)/([A-Za-z0-9_-]+)/?", path)
         story = re.fullmatch(r"/stories/([A-Za-z0-9_.]{1,30})(?:/[0-9]+)?/?", u.path)
         highlight = re.fullmatch(r"/stories/highlights/[0-9]+/?", u.path)
         if not post and not highlight and not (story and story[1].lower() not in {"me", "highlights"}):
             raise UserError("Usá el enlace de una publicación, reel, carrusel o historia de Instagram.")
-        # The story extractor recognizes the canonical desktop host only.
-        if story or highlight:
+        # Account-prefixed share URLs identify the same post by shortcode.
+        # Remove that prefix and img_index so the engine enumerates the full set.
+        if post:
+            kind = 'reel' if post[1] == 'reels' else post[1]
+            path = f'/{kind}/{post[2]}/'
+        if post or story or highlight:
             host = "www.instagram.com"
         platform = "instagram"
     elif host in {"www.tiktok.com", "tiktok.com", "m.tiktok.com", "vm.tiktok.com", "vt.tiktok.com"}:
@@ -53,7 +58,7 @@ def public_url(value: str) -> tuple[str, str]:
     else:
         raise UserError("Solo se admiten enlaces públicos de Instagram y TikTok.")
     # Tracking query parameters are not needed by extractors (including share links).
-    return platform, urlunsplit(("https", host, u.path, "", ""))
+    return platform, urlunsplit(("https", host, path, "", ""))
 
 
 def data_dir() -> Path:
