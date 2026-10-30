@@ -76,7 +76,12 @@ def build():
                 continue
             if len(parts) == 3 and (1, 0, 8) <= parts < tuple(map(int, __version__.split('.'))):
                 versions.append(parts)
-        for parts in sorted(set(versions), reverse=True)[:2]:
+        supported = sorted(set(versions), reverse=True)[:2]
+        # 1.0.13 users could not apply either of the preceding updater fixes.
+        # Preserve their exact public baseline for this repair transition.
+        if __version__ == '1.0.16' and (1, 0, 13) in versions and (1, 0, 13) not in supported:
+            supported.append((1, 0, 13))
+        for parts in supported:
             older_version = '.'.join(map(str, parts))
             if older_version == base['version']:
                 continue
@@ -121,7 +126,9 @@ def write_channel(base_version, patch):
             'patches': [{'from': base_version, 'to': __version__, 'url': url + patch.name,
                          'sha256': sha256(patch), 'size': patch.stat().st_size}],
             'full': {'url': url + full.name, 'sha256': sha256(full), 'size': full.stat().st_size}}
-    repair = ROOT / 'dist/MediaDownloader-Repararactualizador.exe'
+    repair = ROOT / 'dist' / f'MediaDownloader-Repararactualizador-{__version__}.exe'
+    if not repair.exists():
+        repair = ROOT / 'dist/MediaDownloader-Repararactualizador.exe'
     if repair.exists():
         feed['recovery'] = {'url': url + repair.name, 'sha256': sha256(repair), 'size': repair.stat().st_size}
     (ROOT / 'dist/latest.json').write_text(json.dumps(feed, indent=2), encoding='utf-8')
@@ -172,7 +179,7 @@ def publish():
         gh('release', 'create', tag, '--target', source, '--draft', '--title', 'MediaDownloader ' + __version__,
            '--notes', 'Instalación nueva: paquete Windows-x64. Actualización: Actualizar programa → Buscar actualizaciones → Descargar e instalar. ZIP local disponible como alternativa.')
     assets = sorted((ROOT / 'dist').glob('MediaDownloader-*.zip*'))
-    assets += sorted((ROOT / 'dist').glob('MediaDownloader-Repararactualizador.exe*'))
+    assets += sorted((ROOT / 'dist').glob('MediaDownloader-Repararactualizador*.exe*'))
     gh('release', 'upload', tag, *map(str, assets), '--clobber')
     gh('release', 'upload', tag, str(ROOT / 'dist/latest.json'), '--clobber')
     verify_release(tag)  # Verify downloaded bytes before making the release public/latest.

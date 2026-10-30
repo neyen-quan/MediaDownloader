@@ -115,8 +115,8 @@ def test_pending_cleanup_never_deletes_an_unidentified_old_directory(tmp_path, m
     assert (older / 'personal.txt').read_text() == 'do not delete'
     assert (root / 'MediaDownloader.exe').read_bytes() == b'healthy'
     assert state.exists()
-    with pytest.raises(u.UpdateError, match='datos ajenos'):
-        u.apply_update(root, package(tmp_path), health=lambda _: True)
+    # An optional, unidentified old folder is preserved without blocking a new install.
+    assert u.apply_update(root, package(tmp_path), health=lambda _: True) == 'updated'
     assert (older / 'personal.txt').read_text() == 'do not delete'
 
 

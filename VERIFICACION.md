@@ -1,5 +1,9 @@
 # Verificación y aceptación
 
+## Reparador 1.0.15 bloqueado en .older
+
+La captura del usuario muestra WinError 5 en la carpeta `.older`, antes del intercambio. No identifica qué proceso o política de Windows retiene la carpeta; no se atribuye a un programa concreto. 1.0.16 elimina la limpieza obligatoria previa e incorpora pruebas de directorio bloqueado antes de preparar, registro legacy prepared, intercambio con retiro único, rollback y operaciones posteriores con limpieza todavía pendiente. Sigue siendo necesaria la prueba en la PC del usuario; no se afirma que ya haya instalado la versión nueva.
+
 ## Intento 1.0.13 → 1.0.14
 
 El usuario corrigió la observación anterior: la instalación sigue en 1.0.13. Las destacadas funcionan en esa versión, lo que no acredita haber instalado 1.0.14. La captura ubica el error en la preparación de respaldo. No hay traceback local disponible y no se ha identificado el archivo exacto. 1.0.15 prueba fallos reproducibles de preparación con respaldos de solo lectura en Windows, temporales antiguos, helper entrante verificado, reparación online y diagnóstico de archivo/etapa. Su aceptación en esa PC queda pendiente.

@@ -36,6 +36,8 @@ SHA-256 verifica integridad, no una firma del editor; no hay Authenticode. Usar 
 
 Desde 1.0.15 se ejecuta el actualizador de destino verificado cuando viene en el parche, de modo que las correcciones del instalador sirven para esa misma transición. Las versiones anteriores que fallen antes de instalar necesitan una sola vez el asset `MediaDownloader-Repararactualizador.exe` de la release actual: cerrar el programa, abrir ese reparador y elegir el EXE instalado. El reparador consulta el canal oficial, descarga el parche exacto y lo verifica; no hay que descargar un ZIP manualmente. Pide confirmación antes de aplicar y muestra progreso. No reinstala ni cambia la carpeta elegida. Si Windows sigue bloqueando un archivo, el aviso identifica etapa, detalle y ruta del registro local; no compartir cookies ni preferencias.
 
+Desde 1.0.16, una carpeta `.older` antigua bloqueada no es un requisito para instalar: el respaldo `.previous` se aparta usando un nombre de retiro nuevo cuando es necesario. El registro valida ese nombre y conserva la recuperación en cada frontera del intercambio. Solo después de un arranque válido se intenta limpiar los respaldos identificados; si Windows no lo permite, quedan pendientes sin impedir otra actualización. Para reparar una 1.0.13 bloqueada se publica `MediaDownloader-Repararactualizador-1.0.16.exe`, que descarga el parche directo desde esa base exacta. Una carpeta ajena al producto no se borra.
+
 ## Desarrollo y compilación
 
 Ver [BUILD.md](BUILD.md), [ACTUALIZACIONES.md](ACTUALIZACIONES.md) y [VERIFICACION.md](VERIFICACION.md). Código, pruebas y recursos están en main. Logo vectorial en mediadownloader/appearance.py; tools/make_icon.py genera el ICO multirresolución usado por el EXE y la barra de tareas.

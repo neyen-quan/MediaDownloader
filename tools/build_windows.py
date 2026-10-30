@@ -124,6 +124,11 @@ def main():
     repair = ROOT / 'dist/MediaDownloader-Repararactualizador.exe'
     shutil.copy2(target / 'MediaDownloaderUpdater.exe', repair)
     repair.with_suffix('.exe.sha256').write_text(f'{hashlib.file_digest(repair.open("rb"), "sha256").hexdigest()}  {repair.name}\n', encoding='ascii')
+    # Give a replacement repair helper an unmistakable versioned filename.
+    versioned_repair = repair.with_name(f'MediaDownloader-Repararactualizador-{version}.exe')
+    shutil.copy2(repair, versioned_repair)
+    versioned_repair.with_suffix('.exe.sha256').write_text(
+        f'{hashlib.file_digest(versioned_repair.open("rb"), "sha256").hexdigest()}  {versioned_repair.name}\n', encoding='ascii')
     print(f"Portable y actualización: {archive}")
 
 

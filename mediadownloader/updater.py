@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 import traceback
+import uuid
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
@@ -367,16 +368,39 @@ def clear_readonly(operation, path, error):
     operation(path)
 
 
+def retired_backup(root, record):
+    """Accept only our fixed legacy suffix or a UUID sibling, never arbitrary paths."""
+    if not isinstance(record, dict):
+        raise UpdateError('El registro contiene una ruta de respaldo no permitida.')
+    name = record.get('retired', root.name + '.older')
+    if not isinstance(name, str) or not re.fullmatch(re.escape(root.name) + r'\.older(?:-[a-f0-9]{32})?', name):
+        raise UpdateError('El registro contiene una ruta de respaldo no permitida.')
+    return root.parent / name
+
+
 def finish_committed_update(root, progress=None):
     """Optional cleanup can never turn an already healthy installation into failure."""
     _, state = locations(root)
-    older = root.parent / (root.name + '.older')
+    pending = False
     try:
+        record = json.loads(state.read_text(encoding='utf-8')) if state.exists() else {}
+        retired = retired_backup(root, record)
+        # Previously blocked folders are optional cleanup, never installation inputs.
+        candidates = {retired, root.with_name(root.name + '.older')}
+        candidates.update(p for p in root.parent.iterdir() if re.fullmatch(
+            re.escape(root.name) + r'\.older-[a-f0-9]{32}', p.name))
         emit_progress(progress, -1, 'Finalizando la actualización y limpiando el respaldo antiguo…')
-        retry_filesystem(lambda: remove_old_backup(older), progress)
-        retry_filesystem(lambda: state.unlink(missing_ok=True), progress)
-        return True
-    except (OSError, UpdateError):
+        for path in candidates:
+            try:
+                retry_filesystem(lambda: remove_old_backup(path), progress)
+            except (OSError, UpdateError):
+                pending = True
+        if not pending:
+            retry_filesystem(lambda: state.unlink(missing_ok=True), progress)
+            return True
+    except (OSError, UpdateError, ValueError, TypeError):
+        pending = True
+    if pending:
         # Keep the committed journal. A later update retries cleanup and MUST NOT
         # interpret this as an interrupted swap or revert the healthy version.
         emit_progress(progress, 100, 'Actualización instalada. La limpieza del respaldo antiguo queda pendiente.')
@@ -422,21 +446,23 @@ def update_lock(root):
 
 
 def recover_interrupted(root, progress=None):
-    """Only our own deterministic sibling paths are accepted, never paths from JSON."""
+    """Validate the journal's backup basename before touching any sibling."""
     backup, state = locations(root)
-    older = root.parent / (root.name + ".older")
     if not state.exists():
         return False
     try:
-        phase = json.loads(state.read_text(encoding="utf-8"))["phase"]
-    except (OSError, ValueError, KeyError):
+        record = json.loads(state.read_text(encoding="utf-8"))
+        phase = record["phase"]
+        older = retired_backup(root, record)
+    except (OSError, ValueError, KeyError, TypeError):
         raise UpdateError("El registro de actualización está dañado; conservá las carpetas actual y .previous.") from None
     if phase == 'committed' and root.exists():
         check_backup_path(root)
         finish_committed_update(root, progress)
         return False
     if phase in {"prepared", "moving"} and root.exists():
-        if older.exists() and not backup.exists():
+        if not backup.exists() and older.exists():
+            check_backup_path(older)
             retry_filesystem(lambda: older.rename(backup), progress)
         retry_filesystem(state.unlink, progress)
         return False
@@ -450,6 +476,7 @@ def recover_interrupted(root, progress=None):
             retry_filesystem(lambda: root.rename(failed), progress)
         retry_filesystem(lambda: backup.rename(root), progress)
         if older.exists():
+            check_backup_path(older)
             retry_filesystem(lambda: older.rename(backup), progress)
         retry_filesystem(state.unlink, progress)
         return True
@@ -511,13 +538,22 @@ def apply_update(root, archive=None, restore=False, health=smoke, progress=None)
     emit_progress(progress, -1, 'Preparando actualización y recuperación…')
     with update_lock(root):
         check_backup_path(backup)
-        check_backup_path(root.parent / (root.name + ".older"), partial=True)
         if recover_interrupted(root, progress):
             return "recovered"
         if not (root / "MediaDownloader.exe").is_file():
             raise UpdateError("No se encontró la instalación portable de MediaDownloader.")
         stage = Path(tempfile.mkdtemp(prefix=root.name + ".stage-", dir=root.parent))
-        older = root.parent / (root.name + ".older")
+        # Do not inspect, empty, rename or delete a stale .older before installing.
+        # Cloud sync/AV/Explorer can lock even an empty directory's deletion.
+        older = root.with_name(root.name + '.older-' + uuid.uuid4().hex)
+        legacy_older = root.with_name(root.name + '.older')
+        try:
+            if not legacy_older.exists() and not legacy_older.is_symlink():
+                older = legacy_older
+        except OSError:
+            pass  # An inaccessible old backup does not make the active app invalid.
+        def record(phase):
+            journal(state, {'phase': phase, 'retired': older.name})
         try:
             if restore:
                 if not backup.is_dir():
@@ -533,19 +569,16 @@ def apply_update(root, archive=None, restore=False, health=smoke, progress=None)
             emit_progress(progress, -1, 'Conservando archivos personales y preparando respaldo…')
             preserve_user_files(root, stage, progress)
             emit_progress(progress, -1, 'Guardando el registro de preparación…')
-            journal(state, {"phase": "prepared"})
-            if older.exists():
-                emit_progress(progress, -1, 'Limpiando respaldo pendiente: ' + older.name)
-                retry_filesystem(lambda: remove_old_backup(older), progress)
+            record('prepared')
             if backup.exists():
                 emit_progress(progress, -1, 'Apartando respaldo anterior: ' + backup.name)
                 retry_filesystem(lambda: backup.rename(older), progress)
             # Journal precedes both moves: crash recovery covers either move boundary.
-            journal(state, {"phase": "moving"})
+            record('moving')
             try:
                 emit_progress(progress, -1, 'Respaldando la versión actual…')
                 retry_filesystem(lambda: root.rename(backup), progress)
-                journal(state, {"phase": "swapping"})
+                record('swapping')
                 emit_progress(progress, -1, 'Instalando la nueva versión…')
                 retry_filesystem(lambda: stage.rename(root), progress)
                 emit_progress(progress, -1, 'Comprobando el arranque de la nueva versión…')
@@ -553,7 +586,7 @@ def apply_update(root, archive=None, restore=False, health=smoke, progress=None)
                 if not healthy:
                     raise UpdateError("La nueva versión no pudo arrancar. Se recuperó la versión anterior.")
                 emit_progress(progress, -1, 'Confirmando la instalación verificada…')
-                journal(state, {"phase": "committed"})
+                record('committed')
             except BaseException:
                 emit_progress(progress, -1, 'Recuperando la copia anterior…')
                 if backup.exists():
