@@ -18,7 +18,7 @@ Los parches identifican la versión base. Si no hay un parche directo, el progra
 
 Pegar enlace público → Analizar → elegir elementos → guardar visible/selección/todos/ZIP. Previsualizaciones automáticas, miniaturas compactas, visor vertical y zoom para fotos. Los originales se guardan sin recomprimir; FFmpeg combina audio/video sin recodificar y puede producir MKV.
 
-Desde 1.0.17 también se aceptan enlaces de Instagram con el usuario antes de la publicación (`/USUARIO/p/CODIGO/`, y equivalentes para reels y videos). Se convierten al enlace canónico conservando el código exacto; `img_index` no limita el análisis a una sola foto, sino que se carga el carrusel completo para seleccionar qué guardar.
+Desde 1.0.17 también se aceptan enlaces de Instagram con el usuario antes de la publicación (`/USUARIO/p/CODIGO/`, y equivalentes para reels y videos). Se convierten al enlace canónico conservando el código exacto; `img_index` no limita el análisis a una sola foto, sino que se carga el carrusel completo para seleccionar qué guardar. Desde 1.0.18 las rutas de historias tienen prioridad explícita, evitando confundir `/stories/p/ID/` con una publicación.
 
 Configuración, canal y sesión opcional viven en `%LOCALAPPDATA%/MediaDownloader`; las descargas quedan en la carpeta elegida. La sesión se importa desde un cookies.txt Netscape local. Nunca subir ese archivo al repositorio ni compartirlo. Las plataformas pueden exigir sesión, limitar consultas o cambiar sus motores.
 

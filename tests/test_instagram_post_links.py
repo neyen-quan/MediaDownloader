@@ -37,10 +37,16 @@ def test_post_links_are_canonical_and_accepted_by_the_pinned_extractor(url, expe
     'https://www.instagram.com/example%2fname/p/AbC123/',
     'https://www.instagram.com.evil.test/example.name/p/AbC123/',
     'https://www.instagram.com@evil.test/example.name/p/AbC123/',
+    'https://www.instagram.com/stories/p/not-a-story-id/',
 ])
 def test_malformed_account_prefixed_links_remain_rejected(url):
     with pytest.raises(UserError):
         public_url(url)
+
+
+def test_story_route_takes_precedence_over_an_account_prefixed_post():
+    source = 'https://www.instagram.com/stories/p/123/'
+    assert public_url(source + '?igsh=tracking') == ('instagram', source)
 
 
 def test_account_prefixed_carousel_enumerates_every_entry_in_order(tmp_path, monkeypatch):

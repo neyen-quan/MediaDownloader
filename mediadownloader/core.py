@@ -39,6 +39,8 @@ def public_url(value: str) -> tuple[str, str]:
     path = u.path
     if host in {"instagram.com", "www.instagram.com", "m.instagram.com"}:
         post = re.fullmatch(r"/(?:[A-Za-z0-9_.]{1,30}/)?(p|reel|reels|tv)/([A-Za-z0-9_-]+)/?", path)
+        if path.startswith('/stories/'):
+            post = None  # /stories/p/123 is a story, never the post /p/123.
         story = re.fullmatch(r"/stories/([A-Za-z0-9_.]{1,30})(?:/[0-9]+)?/?", u.path)
         highlight = re.fullmatch(r"/stories/highlights/[0-9]+/?", u.path)
         if not post and not highlight and not (story and story[1].lower() not in {"me", "highlights"}):
