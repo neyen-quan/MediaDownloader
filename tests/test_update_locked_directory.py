@@ -1,5 +1,4 @@
 """A stale backup directory must never be a prerequisite for installation."""
-import ctypes
 import json
 import os
 from pathlib import Path
@@ -102,23 +101,15 @@ def test_health_failure_with_locked_stale_older_restores_both_current_and_previo
 
 @pytest.mark.skipif(os.name != 'nt', reason='Real Windows directory deletion lock')
 def test_real_windows_directory_locked_before_update_is_nonfatal(tmp_path):
+    from tools.windows_test_support import deny_directory_delete
     root, backup, state, older = fixture_with_stale_backup(tmp_path)
-    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-    kernel.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
-        ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p]
-    kernel.CreateFileW.restype = ctypes.c_void_p
-    kernel.CloseHandle.argtypes = [ctypes.c_void_p]
-    # Share reads/writes but deny DELETE on the directory *before* preparation.
-    handle = kernel.CreateFileW(str(older), 0x80, 3, None, 3, 0x02000000, None)
-    assert handle not in (None, ctypes.c_void_p(-1).value), ctypes.get_last_error()
-    try:
-        with pytest.raises(PermissionError):
-            u.remove_old_backup(older)  # Prove the actual OS lock, not a mocked error.
+    with deny_directory_delete(older):
+        with pytest.raises(PermissionError) as denied:
+            u.remove_old_backup(older)
+        assert denied.value.winerror == 5  # Match the actual reported error exactly.
         assert u.apply_update(root, package(tmp_path), health=lambda _: True) == 'updated'
         assert (root / 'MediaDownloader.exe').read_bytes() == b'new'
         assert (backup / 'MediaDownloader.exe').read_bytes() == b'current'
         assert json.loads(state.read_text())['phase'] == 'committed'
-    finally:
-        kernel.CloseHandle(handle)
     assert u.recover_interrupted(root) is False
     assert not older.exists() and not state.exists()

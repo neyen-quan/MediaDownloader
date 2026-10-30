@@ -8,11 +8,11 @@ import tempfile
 import struct
 import json
 import stat
-import ctypes
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from mediadownloader.updater import build_package, build_delta, extract_package, sha256, locations, prepare_helper, journal, recover_interrupted
+from tools.windows_test_support import deny_directory_delete
 
 
 def main():
@@ -106,18 +106,11 @@ def main():
         # Reproduce the failed repair: an old directory cannot be deleted before
         # staging, and the previous attempt left a prepared journal beside it.
         older.mkdir()
-        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-        kernel.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
-            ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p]
-        kernel.CreateFileW.restype = ctypes.c_void_p
-        kernel.CloseHandle.argtypes = [ctypes.c_void_p]
-        locked = kernel.CreateFileW(str(older), 0x80, 3, None, 3, 0x02000000, None)
-        assert locked not in (None, ctypes.c_void_p(-1).value), ctypes.get_last_error()
-        try:
+        with deny_directory_delete(older):
             try:
                 older.rmdir()
-            except PermissionError:
-                pass
+            except PermissionError as denied:
+                assert denied.winerror == 5
             else:
                 raise AssertionError('Directory deletion was not actually locked')
             journal(locations(root)[1], {'phase': 'prepared'})
@@ -128,8 +121,6 @@ def main():
             # Even the next operation must work while the stale folder is locked.
             subprocess.run([str(incoming), '--root', str(root), '--restore',
                             '--no-relaunch'], check=True, timeout=240)
-        finally:
-            kernel.CloseHandle(locked)
         assert recover_interrupted(root) is False
         assert not older.exists() and not locations(root)[1].exists()
         # Deliberately broken executable with a valid manifest tests post-update startup rollback.
