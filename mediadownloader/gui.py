@@ -19,7 +19,7 @@ from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtMultimediaWidgets import QVideoWidget
 
 from . import __version__
-from .core import Settings, UserError, Cancelled, data_dir, save_selection
+from .core import Settings, UserError, Cancelled, data_dir, save_selection, public_url
 from .appearance import STYLE, app_icon, checkbox_image
 from .image_preview import ImagePreview, PortraitFrame
 from . import windows_shell
@@ -49,6 +49,44 @@ class Task(QThread):
             self.error.emit(f"No se pudo completar la operación ({type(e).__name__}). Volvé a intentarlo o actualizá el programa.")
 
 
+def dropped_link(mime):
+    if mime.hasUrls():
+        urls = mime.urls()
+        if len(urls) != 1:
+            return ""
+        value = urls[0].toString()
+    elif mime.hasText():
+        value = mime.text().strip()
+    else:
+        return ""
+    try:
+        public_url(value)
+    except UserError:
+        return ""
+    return value
+
+
+class LinkEdit(QLineEdit):
+    link_dropped = Signal(str)
+
+    def dragEnterEvent(self, event):
+        if self.isEnabled() and dropped_link(event.mimeData()):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        self.dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        value = dropped_link(event.mimeData())
+        if self.isEnabled() and value:
+            self.link_dropped.emit(value)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -57,6 +95,7 @@ class Window(QMainWindow):
         self.setMinimumSize(980, 760)
         self.setStyleSheet(STYLE)
         self.setWindowIcon(app_icon())
+        self.setAcceptDrops(True)
         self.settings = Settings.load()
         self.task = None
         self.after_task = None
@@ -134,8 +173,10 @@ class Window(QMainWindow):
         row = QHBoxLayout()
         row.setSpacing(8)
         row.addWidget(label("Enlace"))
-        self.url = QLineEdit()
-        self.url.setPlaceholderText("Instagram: post, reel o historia · TikTok…")
+        self.url = LinkEdit()
+        self.url.setPlaceholderText("Pegá o arrastrá un enlace de Instagram, TikTok o YouTube…")
+        self.url.setToolTip("Pegá un enlace y presioná Enter, o arrastralo desde el navegador para analizarlo.")
+        self.url.link_dropped.connect(self.receive_link)
         self.url.setMinimumWidth(130)
         self.url.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.url.setClearButtonEnabled(True)
@@ -148,6 +189,7 @@ class Window(QMainWindow):
         row.addWidget(label("Guardar en"))
         self.folder = QLineEdit(self.settings.destination)
         self.folder.setReadOnly(True)
+        self.folder.setAcceptDrops(False)
         self.folder.setMinimumWidth(130)
         self.folder.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.folder.setPlaceholderText("Elegí una carpeta para tus descargas")
@@ -411,6 +453,29 @@ class Window(QMainWindow):
         value, cookies = self.url.text(), self.settings.cookies
         self.start(lambda cancel, progress: engines.analyze(value, cookies, cancel, progress), self.analyzed)
 
+    def receive_link(self, value):
+        if self.task or self.pending_close:
+            return
+        self.url.setText(value)
+        self.analyze()
+
+    def dragEnterEvent(self, event):
+        if not self.task and not self.pending_close and dropped_link(event.mimeData()):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        self.dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        value = dropped_link(event.mimeData())
+        if not self.task and not self.pending_close and value:
+            self.receive_link(value)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
     def analyzed(self, items):
         self.player.stop(); self.player.setSource(QUrl())
         self.items = items
@@ -581,7 +646,7 @@ class Window(QMainWindow):
     def configure_session(self):
         dialog = QMessageBox(self)
         dialog.setWindowTitle("Sesión local opcional")
-        dialog.setText("Instagram y TikTok pueden exigir sesión incluso para contenido público.\n\n"
+        dialog.setText("Instagram, TikTok y YouTube pueden exigir sesión incluso para contenido público.\n\n"
                        "Podés importar un cookies.txt de tu navegador en formato Netscape. Se guarda solo en esta PC, "
                        "en tu perfil de usuario, y se envía únicamente a sus dominios correspondientes. "
                        "El archivo permite usar tu sesión: no lo compartas ni lo incluyas en ZIPs.\n\n"

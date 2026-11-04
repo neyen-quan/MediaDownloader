@@ -79,6 +79,18 @@ def main():
                                     check=True, timeout=45, capture_output=True, text=True,
                                     creationflags=subprocess.CREATE_NO_WINDOW)
             assert result.stdout.strip(), f"Frozen engine {engine} did not execute"
+        # The YouTube patch must carry a working JS runtime and both matching
+        # solver files, including their bundled parser/generator dependencies.
+        solver = root / '_internal/yt_dlp_ejs/yt/solver'
+        script = ((solver / 'lib.min.js').read_text(encoding='utf-8')
+                  + '\nconst {meriyah, astring} = lib;\n'
+                  + (solver / 'core.min.js').read_text(encoding='utf-8')
+                  + '\nconsole.log(typeof jsc);\n')
+        result = subprocess.run([str(root / '_internal/deno/deno.exe'), 'run', '--no-config',
+                                 '--no-remote', '--no-npm', '--ext=js', '-'], input=script,
+                                capture_output=True, text=True, check=True, timeout=45,
+                                creationflags=subprocess.CREATE_NO_WINDOW)
+        assert result.stdout.strip() == 'function', result.stdout
         # The previous process must release its EXE/DLL handles before a Windows update can swap directories.
         parent = subprocess.Popen([str(exe), "--smoke-test"])
         helper = temp / "MediaDownloaderUpdater.exe"

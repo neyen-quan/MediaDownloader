@@ -9,7 +9,7 @@ import threading
 import zipfile
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 APP_ID = "MediaDownloader"
 
@@ -35,7 +35,7 @@ def public_url(value: str) -> tuple[str, str]:
         if u.scheme != "https" or u.username or u.password or u.port not in (None, 443):
             raise ValueError()
     except ValueError:
-        raise UserError("Pegá un enlace HTTPS público de Instagram o TikTok.") from None
+        raise UserError("Pegá un enlace HTTPS público de Instagram, TikTok o YouTube.") from None
     path = u.path
     if host in {"instagram.com", "www.instagram.com", "m.instagram.com"}:
         post = re.fullmatch(r"/(?:[A-Za-z0-9_.]{1,30}/)?(p|reel|reels|tv)/([A-Za-z0-9_-]+)/?", path)
@@ -57,8 +57,23 @@ def public_url(value: str) -> tuple[str, str]:
         if not u.path.strip("/"):
             raise UserError("El enlace de TikTok debe apuntar a un video.")
         platform = "tiktok"
+    elif host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"}:
+        if host in {"youtu.be", "www.youtu.be"}:
+            match = re.fullmatch(r"/([A-Za-z0-9_-]{11})/?", path)
+            video_id = match[1] if match else ""
+        elif path in {"/watch", "/watch/"}:
+            ids = parse_qs(u.query).get("v", [])
+            video_id = ids[0] if len(ids) == 1 else ""
+        else:
+            match = re.fullmatch(r"/(?:shorts|live|embed)/([A-Za-z0-9_-]{11})/?", path)
+            video_id = match[1] if match else ""
+        if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+            raise UserError("Usá el enlace de un video de YouTube o un Short; las listas y los canales no se descargan completos.")
+        # v is the video identity, not tracking. Drop list/index/t/si so a shared
+        # playlist link still downloads exactly this complete video once.
+        return "youtube", "https://www.youtube.com/watch?" + urlencode({"v": video_id})
     else:
-        raise UserError("Solo se admiten enlaces públicos de Instagram y TikTok.")
+        raise UserError("Solo se admiten enlaces públicos de Instagram, TikTok y YouTube.")
     # Tracking query parameters are not needed by extractors (including share links).
     return platform, urlunsplit(("https", host, path, "", ""))
 

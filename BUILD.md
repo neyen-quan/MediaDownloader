@@ -2,6 +2,8 @@
 
 Requisitos de desarrollo: Python 3.12.10 x64 y dependencias fijadas en requirements-dev.txt. FFmpeg/FFprobe deben estar en PATH para las pruebas multimedia. Para crear el portable se requiere Windows x64; Linux solo permite desarrollar y ejecutar la suite, no generar un EXE Windows válido.
 
+Desde 1.0.19, requirements.txt fija yt-dlp, su paquete EJS compatible y Deno. PyInstaller incluye los scripts de yt_dlp_ejs y el ejecutable de Deno de la distribución instalada en `_internal/deno/`. Las pruebas del portable ejecutan esos scripts con ese binario, y la suite multimedia usa el worker compilado para verificar formatos separados, selección de la mejor calidad, audio y combinación sin recodificar. No se descargan componentes JavaScript durante el uso.
+
 ```sh
 python -m venv .venv
 # Windows: .venv/Scripts/activate; Linux: source .venv/bin/activate

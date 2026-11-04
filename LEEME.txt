@@ -1,7 +1,10 @@
 MediaDownloader — Windows x64
 
 Instalación nueva: extraer TODO el portable y abrir MediaDownloader.exe.
-Uso: pegar enlace público, Analizar y guardar los elementos elegidos.
+Uso: pegar un enlace público de Instagram, TikTok o YouTube, Analizar y guardar.
+También podés arrastrar un enlace desde el navegador para analizarlo automáticamente.
+YouTube admite videos individuales, enlaces youtu.be y Shorts; no listas completas.
+Video y audio se combinan en MKV sin recomprimir. Los componentes vienen incluidos.
 La previsualización carga automáticamente. El zoom no modifica el original.
 
 ACTUALIZAR

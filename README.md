@@ -1,6 +1,6 @@
 # MediaDownloader
 
-Aplicación portable Windows 10/11 x64, en español, para fotos, carruseles, reels e historias de Instagram y videos TikTok. Python 3.12 + PySide6/Qt; motores locales gallery-dl y yt-dlp, FFmpeg/FFprobe incluidos. No usa sitios de descarga intermediarios ni depende técnicamente de PhotoBatch.
+Aplicación portable Windows 10/11 x64, en español, para fotos, carruseles, reels e historias de Instagram y videos de TikTok y YouTube. Python 3.12 + PySide6/Qt; motores locales gallery-dl y yt-dlp, FFmpeg/FFprobe incluidos. No usa sitios de descarga intermediarios ni depende técnicamente de PhotoBatch.
 
 ## Instalar y actualizar
 
@@ -17,6 +17,10 @@ Los parches identifican la versión base. Si no hay un parche directo, el progra
 ## Uso y datos
 
 Pegar enlace público → Analizar → elegir elementos → guardar visible/selección/todos/ZIP. Previsualizaciones automáticas, miniaturas compactas, visor vertical y zoom para fotos. Los originales se guardan sin recomprimir; FFmpeg combina audio/video sin recodificar y puede producir MKV.
+
+Desde 1.0.19 también se puede arrastrar un enlace desde el navegador al campo Enlace o a la ventana: comienza el análisis automáticamente. Admite un enlace por vez de Instagram, TikTok o YouTube. Pegar y presionar Enter o Analizar sigue disponible.
+
+YouTube: videos individuales con `/watch?v=ID`, enlaces cortos `youtu.be/ID`, Shorts y directos ya finalizados. Se conserva el ID y se elimina seguimiento, marcas de tiempo y referencias a listas; un video compartido desde una lista descarga únicamente ese video completo. No descarga canales ni listas completas, ni graba emisiones en curso o programadas. Selecciona la mejor calidad disponible y su audio, combinándolos en MKV sin recomprimir. El portable incluye Deno y los scripts EJS compatibles con yt-dlp: no requiere instalar herramientas aparte ni descargar scripts al usarlo. Las restricciones de acceso o sesión de YouTube siguen vigentes.
 
 Desde 1.0.17 también se aceptan enlaces de Instagram con el usuario antes de la publicación (`/USUARIO/p/CODIGO/`, y equivalentes para reels y videos). Se convierten al enlace canónico conservando el código exacto; `img_index` no limita el análisis a una sola foto, sino que se carga el carrusel completo para seleccionar qué guardar. Desde 1.0.18 las rutas de historias tienen prioridad explícita, evitando confundir `/stories/p/ID/` con una publicación.
 

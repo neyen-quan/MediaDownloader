@@ -1,14 +1,16 @@
 # One shared bundle, two entry points: a windowed UI and a hidden console worker.
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
+from deno import find_deno_bin
 
 root = Path(SPECPATH)
 datas, binaries, hiddenimports = [], [], []
-for package in ('gallery_dl', 'yt_dlp'):
+for package in ('gallery_dl', 'yt_dlp', 'yt_dlp_ejs'):
     package_datas, package_binaries, package_hidden = collect_all(package)
     datas += package_datas
     binaries += package_binaries
     hiddenimports += package_hidden
+binaries.append((find_deno_bin(), 'deno'))
 
 a = Analysis([str(root / 'main.py')], pathex=[str(root)], binaries=binaries,
              datas=datas, hiddenimports=hiddenimports,

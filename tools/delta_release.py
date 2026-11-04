@@ -81,6 +81,10 @@ def build():
         # Preserve their exact public baseline for this repair transition.
         if __version__ == '1.0.16' and (1, 0, 13) in versions and (1, 0, 13) not in supported:
             supported.append((1, 0, 13))
+        # The last confirmed installation in this maintenance thread is 1.0.16.
+        # Deliver YouTube there directly as well as to the latest two releases.
+        if __version__ == '1.0.19' and (1, 0, 16) in versions and (1, 0, 16) not in supported:
+            supported.append((1, 0, 16))
         for parts in supported:
             older_version = '.'.join(map(str, parts))
             if older_version == base['version']:

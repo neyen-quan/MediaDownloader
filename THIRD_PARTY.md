@@ -1,11 +1,13 @@
 # Componentes incluidos
 
-La aplicación conecta directamente con Instagram y TikTok mediante motores locales.
+La aplicación conecta directamente con Instagram, TikTok y YouTube mediante motores locales.
 No usa Snapinsta, Snaptik ni servicios de descarga intermediarios.
 
 - PySide6 / Qt: LGPLv3 / GPLv3 / licencias de Qt. https://www.qt.io/licensing/
 - gallery-dl: GPL-2.0-or-later. https://github.com/mikf/gallery-dl
 - yt-dlp: Unlicense para el proyecto; algunas dependencias tienen licencias propias. https://github.com/yt-dlp/yt-dlp
+- yt-dlp-ejs: Unlicense; incluye meriyah (ISC) y astring (MIT), cuyos avisos acompañan los scripts. https://github.com/yt-dlp/ejs
+- Deno: MIT, con avisos de componentes incluidos en su distribución. https://github.com/denoland/deno
 - Requests y dependencias: consultar sus licencias incluidas. https://requests.readthedocs.io/
 - FFmpeg/FFprobe: build essentials GPL de Gyan, proveedor listado por FFmpeg.
   https://www.gyan.dev/ffmpeg/builds/ y https://ffmpeg.org/download.html

@@ -3,6 +3,7 @@ import struct
 import time
 import zipfile
 import zlib
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 if os.name != "nt":
@@ -187,4 +188,62 @@ def test_compact_toolbar_and_portrait_preview_use_window_height(tmp_path, monkey
     assert window.stack.width() <= window.portrait.width()
     assert window.stack.height() <= window.portrait.height()
     window.close()
+
+
+@pytest.mark.parametrize("surface", ["window", "field"])
+@pytest.mark.parametrize("payload", ["url", "text"])
+def test_browser_link_drop_starts_analysis_and_rejects_replacement_while_busy(tmp_path, monkeypatch, surface, payload):
+    import threading
+    from PySide6.QtCore import QMimeData, QPoint, QPointF, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "profile"))
+    calls, release = [], threading.Event()
+    source = "https://www.youtube.com/watch?v=xHEMkbyXFxs&list=example"
+    def analyze(value, cookies, cancel, progress):
+        calls.append(value)
+        release.wait(3)
+        return [Media(1, "video", source, "mkv", "yt-dlp", source)]
+    monkeypatch.setattr("mediadownloader.gui.engines.analyze", analyze)
+    monkeypatch.setattr(Window, "queue_preview", lambda self: None)
+    app = QApplication.instance() or QApplication([])
+    window = Window(); window.show(); app.processEvents()
+    mime = QMimeData()
+    if payload == "url":
+        mime.setUrls([QUrl(source)])
+    else:
+        mime.setText(source)
+    target = window if surface == "window" else window.url
+    try:
+        enter = QDragEnterEvent(QPoint(20, 20), Qt.DropAction.CopyAction, mime,
+                                Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        app.sendEvent(target, enter)
+        assert enter.isAccepted()
+        drop = QDropEvent(QPointF(20, 20), Qt.DropAction.CopyAction, mime,
+                          Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        app.sendEvent(target, drop)
+        assert drop.isAccepted() and window.url.text() == source and window.task
+        wait(app, lambda: bool(calls))
+        second = QDragEnterEvent(QPoint(20, 20), Qt.DropAction.CopyAction, mime,
+                                 Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        app.sendEvent(window, second)
+        assert not second.isAccepted()
+        release.set()
+        wait(app, lambda: window.task is None)
+        assert calls == [source] and len(window.items) == 1
+    finally:
+        release.set()
+        window.close()
+        wait(app, lambda: not window.isVisible())
+
+
+def test_drops_ignore_local_files_unrelated_sites_and_multiple_links():
+    from PySide6.QtCore import QMimeData, QUrl
+    from mediadownloader.gui import dropped_link
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile("/example.txt")])
+    assert not dropped_link(mime)
+    mime.setUrls([QUrl("https://example.com/")])
+    assert not dropped_link(mime)
+    mime.setUrls([QUrl("https://youtu.be/xHEMkbyXFxs")] * 2)
+    assert not dropped_link(mime)
 

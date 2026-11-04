@@ -136,6 +136,10 @@ def gallery_items(raw, source):
 
 def ytdlp_items(raw, source):
     info = json.loads(raw)
+    if urlsplit(source).hostname == "www.youtube.com" and (
+        info.get("is_live") or info.get("live_status") in {"is_live", "is_upcoming"}
+    ):
+        raise UserError("Este video todavía está en directo o no comenzó. Probá cuando haya finalizado y esté publicado.")
     entries = info.get("entries") if info.get("_type") in {"playlist", "multi_video"} else [info]
     result = []
     for entry in entries or []:
@@ -174,6 +178,8 @@ def analyze(value, cookies, cancel, progress):
         # yt-dlp is used for video delivery, while gallery-dl owns complete IG enumeration.
         return gallery_items(run_engine("gallery-dl", [*args, source], cancel), source)
     args = ["--ignore-config", "--dump-single-json", "--skip-download", "--no-warnings", "--socket-timeout", "25"]
+    if platform == "youtube":
+        args += youtube_options()
     if cookies:
         args += ["--cookies", cookies]
     return ytdlp_items(run_engine("yt-dlp", [*args, source], cancel), source)
@@ -227,6 +233,19 @@ def ffmpeg_location():
     return None
 
 
+def youtube_options():
+    # Bundle both the matching EJS scripts and a JS runtime: the user's PC does
+    # not need Python, Node, Deno or remote code downloads to solve challenges.
+    if getattr(sys, "frozen", False):
+        runtime = Path(sys._MEIPASS) / "deno" / "deno.exe"
+    else:
+        from deno import find_deno_bin
+        runtime = Path(find_deno_bin())
+    if not runtime.is_file():
+        raise UserError("Falta un componente de YouTube. Actualizá o repará MediaDownloader.")
+    return ["--no-playlist", "--no-js-runtimes", "--js-runtimes", f"deno:{runtime}"]
+
+
 def fetch(item, folder, cancel, progress, cookies=""):
     folder.mkdir(parents=True, exist_ok=True)
     if item.engine == "gallery-dl":
@@ -240,6 +259,8 @@ def fetch(item, folder, cancel, progress, cookies=""):
             "--retries", "3", "--fragment-retries", "3", "--no-part",
             "-f", "bv*+ba/b", "--merge-output-format", "mkv", "--remux-video", "mkv",
             "--write-info-json", "-o", str(folder / "media.%(ext)s")]
+    if urlsplit(item.source).hostname == "www.youtube.com":
+        args += youtube_options()
     if cookies:
         args += ["--cookies", cookies]
     if ffmpeg_location():
@@ -285,9 +306,10 @@ def fetch(item, folder, cancel, progress, cookies=""):
     if len(paths) != 1 or not paths[0].stat().st_size:
         raise UserError("El motor no generó un video completo.")
     metadata = json.loads((folder / "media.info.json").read_text(encoding="utf-8"))
-    # Reject silent video rather than presenting it as a successful TikTok download.
+    # Reject silent video rather than presenting it as a successful download.
     formats = metadata.get("requested_formats") or [metadata]
-    if "tiktok.com" in urlsplit(item.source).netloc and not any(f.get("acodec") and f["acodec"] != "none" for f in formats):
+    host = urlsplit(item.source).hostname or ""
+    if (host.endswith("tiktok.com") or host == "www.youtube.com") and not any(f.get("acodec") and f["acodec"] != "none" for f in formats):
         raise UserError("La plataforma no entregó una pista de audio para este video.")
     progress(100, "Video y audio guardados sin recompresión.")
     return paths[0]
