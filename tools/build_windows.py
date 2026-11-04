@@ -107,7 +107,11 @@ def main():
         encoding="ascii")
     # Retain dependency license metadata along with PyInstaller's bundled Qt libraries.
     import importlib.metadata as metadata
-    for name in ("PySide6", "PySide6_Essentials", "PySide6_Addons", "shiboken6", "gallery-dl", "yt-dlp", "yt-dlp-ejs", "deno", "requests", "certifi"):
+    packages = ["PySide6", "PySide6_Essentials", "PySide6_Addons", "shiboken6", "gallery-dl", "yt-dlp", "requests", "certifi"]
+    # Recovery runs current tools against historical source/requirements too.
+    if tuple(map(int, __version__.split('.'))) >= (1, 0, 19):
+        packages += ["yt-dlp-ejs", "deno"]
+    for name in packages:
         dist = metadata.distribution(name)
         for path in dist.files or []:
             if "dist-info" in str(path) and any(w in str(path).lower() for w in ("license", "copying", "notice")):
