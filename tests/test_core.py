@@ -83,6 +83,54 @@ def test_cancel_zip_leaves_no_partial_output(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
+def test_zip_releases_each_original_before_downloading_the_next(tmp_path):
+    previous = []
+    def fetch(*args):
+        assert all(not path.exists() for path in previous)
+        path = fixture_fetch(*args)
+        previous.append(path)
+        return path
+    files = save_selection(sample_items(), tmp_path, True, fetch, threading.Event(), lambda *_: None)
+    with zipfile.ZipFile(files[0]) as archive:
+        assert archive.testzip() is None
+        assert [archive.read(name) for name in archive.namelist()] == [b"original-1", b"original-2", b"original-3"]
+        assert all(info.compress_type == zipfile.ZIP_STORED for info in archive.infolist())
+
+
+def test_cancel_during_large_zip_member_copy_leaves_no_archive(tmp_path):
+    cancel = threading.Event()
+    def fetch(item, folder, *_):
+        folder.mkdir(parents=True)
+        path = folder / item.filename
+        path.write_bytes(b"original" * (512 * 1024))
+        return path
+    def progress(percent, message):
+        if message.startswith("Preparando ZIP"):
+            assert percent < 99  # Cancellation happens during, not after, the copy.
+            cancel.set()
+    with pytest.raises(Cancelled):
+        save_selection(sample_items()[:1], tmp_path, True, fetch, cancel, progress)
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("as_zip", [False, True])
+def test_saved_filename_preserves_actual_remuxed_container(tmp_path, as_zip):
+    item = sample_items()[1]  # An older analysis or preview declared MP4.
+    def fetch(item, folder, *_):
+        folder.mkdir(parents=True)
+        path = folder / "media.mkv"
+        path.write_bytes(b"original-video-and-audio")
+        return path
+    files = save_selection([item], tmp_path, as_zip, fetch, threading.Event(), lambda *_: None)
+    if as_zip:
+        with zipfile.ZipFile(files[0]) as archive:
+            assert archive.namelist() == ["002_video.mkv"]
+            assert archive.read("002_video.mkv") == b"original-video-and-audio"
+    else:
+        assert files[0].name == "002_video.mkv"
+        assert files[0].read_bytes() == b"original-video-and-audio"
+
+
 def test_empty_selection(tmp_path):
     with pytest.raises(UserError):
         save_selection([], tmp_path, True, fixture_fetch, threading.Event(), lambda *_: None)

@@ -165,14 +165,18 @@ def test_closing_cancels_preview_before_cleaning_cache(tmp_path, monkeypatch):
     assert window.preview_task is None and not os.path.exists(cache)
 
 
-def test_compact_toolbar_and_portrait_preview_use_window_height(tmp_path, monkeypatch):
+def test_notebook_layout_keeps_destination_and_actions_visible(tmp_path, monkeypatch):
+    from PySide6.QtCore import QRect, QPoint
+    from PySide6.QtWidgets import QScrollArea
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "profile"))
     app = QApplication.instance() or QApplication([])
     window = Window(); window.resize(1280, 900); window.show()
     for _ in range(5):
         app.processEvents()
-    assert window.url.mapTo(window, window.url.rect().topLeft()).y() == window.folder.mapTo(window, window.folder.rect().topLeft()).y()
-    assert window.url.mapTo(window, window.url.rect().topLeft()).y() < 110
+    assert window.url.mapTo(window, QPoint()).y() < 110
+    # The origin is separate from the destination, leaving room for a whole URL.
+    assert window.url.width() > window.width() / 2
+    assert window.folder.mapTo(window, QPoint()).y() > window.content_split.geometry().bottom()
     assert window.content_split.height() > 480
     assert window.image.height() > 400
     assert abs(window.stack.width() / window.stack.height() - 3 / 4) < 0.01
@@ -181,12 +185,22 @@ def test_compact_toolbar_and_portrait_preview_use_window_height(tmp_path, monkey
     app.processEvents()
     assert abs(window.stack.width() / window.stack.height() - 9 / 16) < 0.01
     assert window.content_split.size() == before
-    window.resize(980, 760)
-    for _ in range(5):
-        app.processEvents()
-    assert window.url.width() >= 130 and window.folder.width() >= 130
-    assert window.stack.width() <= window.portrait.width()
-    assert window.stack.height() <= window.portrait.height()
+    for width, height in ((980, 660), (980, 700), (1100, 760)):
+        window.resize(width, height)
+        for _ in range(5):
+            app.processEvents()
+        assert window.width() == width and window.height() == height
+        assert not window.findChildren(QScrollArea)
+        assert window.url.width() >= 400 and window.folder.width() >= 130
+        assert window.stack.width() <= window.portrait.width()
+        assert window.stack.height() <= window.portrait.height()
+        assert window.image.height() >= 190
+        for control in (window.url, window.folder, window.folder_button,
+                        window.download_one, window.download_selected, window.download_all,
+                        window.download_zip, window.session_button, window.update_button,
+                        window.cancel_button, window.restore_button):
+            bounds = QRect(control.mapTo(window, QPoint()), control.size())
+            assert window.rect().contains(bounds), control.text()
     window.close()
 
 

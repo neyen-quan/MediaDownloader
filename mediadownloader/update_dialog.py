@@ -88,6 +88,7 @@ class UpdateDialog(QDialog):
         self.report(-1, 'Iniciando operación…')
         self.clock.start()
         self.window.task.error.connect(self.operation_failed)
+        self.window.task.cancelled.connect(self.operation_failed)
         self.window.task.progress.connect(self.report)
         self.window.task.finished.connect(self.operation_finished)
         self.refresh()

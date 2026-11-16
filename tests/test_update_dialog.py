@@ -104,3 +104,30 @@ def test_progress_is_visible_and_unknown_phases_use_busy_bar(tmp_path, monkeypat
     assert dialog.bar.maximum() == 100 and dialog.bar.value() == 0
     assert 'detenida' in dialog.progress.text()
     dialog.close(); window.close()
+
+
+def test_cancelled_download_resets_dialog_and_allows_retry(tmp_path, monkeypatch):
+    from mediadownloader.core import check_cancel
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'profile'))
+    warnings = []
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: warnings.append(args))
+    app = QApplication.instance() or QApplication([])
+    window = Window(); dialog = UpdateDialog(window); dialog.show()
+
+    def action(cancel, progress):
+        progress(42, 'Descargando actualización…')
+        cancel.wait(3)
+        check_cancel(cancel)
+
+    try:
+        dialog.run(action, lambda _: None)
+        wait(app, lambda: dialog.bar.value() == 42)
+        dialog.cancel_button.click()
+        wait(app, lambda: window.task is None)
+        assert not warnings
+        assert dialog.bar.value() == 0 and dialog.bar.maximum() == 100
+        assert 'cancelada' in dialog.message.text().lower()
+        assert dialog.check_button.isEnabled() and not dialog.cancel_button.isEnabled()
+        assert not dialog.clock.isActive()
+    finally:
+        dialog.close(); window.close()

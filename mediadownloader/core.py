@@ -5,8 +5,8 @@ import json
 import os
 import re
 import tempfile
-import threading
 import zipfile
+from contextlib import nullcontext
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
@@ -162,6 +162,30 @@ def publish_file(source: Path, folder: Path, name: str):
     return target
 
 
+def copy_stream(source, target, size, cancel, progress):
+    """Copy in bounded chunks, reporting only changed percentages to the UI."""
+    copied = 0
+    last_percent = -1
+    while True:
+        check_cancel(cancel)
+        block = source.read(1024 * 1024)
+        if not block:
+            break
+        target.write(block)
+        copied += len(block)
+        percent = min(100, int(copied * 100 / max(1, size)))
+        if percent != last_percent:
+            progress(percent)
+            last_percent = percent
+
+
+def _archive_file(archive, path, name, cancel, progress):
+    """ZipInfo carries the real size, allowing ZIP64 for large originals."""
+    info = zipfile.ZipInfo.from_file(path, name)
+    with path.open("rb") as source, archive.open(info, "w") as target:
+        copy_stream(source, target, info.file_size, cancel, progress)
+
+
 def save_selection(items, folder, as_zip, fetch, cancel, progress):
     """fetch(item, working_directory, cancel, progress) -> complete local file."""
     items = sorted(items, key=lambda m: m.index)
@@ -173,25 +197,34 @@ def save_selection(items, folder, as_zip, fetch, cancel, progress):
     # Same filesystem for atomic final moves.
     with tempfile.TemporaryDirectory(prefix=".MediaDownloader-", dir=folder) as temp:
         temp = Path(temp)
-        paths = []
-        for position, item in enumerate(items):
-            check_cancel(cancel)
-            def report(percent, message):
-                progress(int((position + percent / 100) * 100 / len(items)), message)
-            path = fetch(item, temp / str(item.index), cancel, report)
-            paths.append((item, path))
-            if not as_zip:
+        archive_path = temp / "selected.zip"
+        # Store each finished original immediately, then release its temporary
+        # copy. A batch no longer needs disk space for every original plus ZIP.
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_STORED) if as_zip else nullcontext() as archive:
+            for position, item in enumerate(items):
                 check_cancel(cancel)
-                completed.append(publish_file(path, folder, item.filename))
+                def report(percent, message):
+                    progress(min(99, int((position + percent / 100) * 100 / len(items))), message)
+                def downloaded(percent, message):
+                    report(percent * 0.9 if as_zip else percent, message)
+                path = fetch(item, temp / str(item.index), cancel, downloaded)
+                check_cancel(cancel)
+                # A remux changes the container, not its media quality. Keep
+                # its actual extension when saving a cached or downloaded file.
+                extension = path.suffix.lower().lstrip(".")
+                name = item.filename
+                if re.fullmatch(r"[a-z0-9]{1,8}", extension):
+                    name = str(Path(name).with_suffix("." + extension))
+                if archive is not None:
+                    _archive_file(archive, path, name, cancel,
+                                  lambda percent: report(90 + percent / 10,
+                                      f"Preparando ZIP: {position + 1} de {len(items)}…"))
+                    path.unlink()
+                else:
+                    completed.append(publish_file(path, folder, name))
         if as_zip:
-            archive = temp / "selected.zip"
-            # Media is already compressed. ZIP_STORED avoids wasted recompression.
-            with zipfile.ZipFile(archive, "w", zipfile.ZIP_STORED) as z:
-                for item, path in paths:
-                    check_cancel(cancel)
-                    z.write(path, item.filename)
             check_cancel(cancel)
-            completed.append(publish_file(archive, folder, "MediaDownloader.zip"))
+            completed.append(publish_file(archive_path, folder, "MediaDownloader.zip"))
     progress(100, f"Guardados {len(items)} elemento(s).")
     return completed
 

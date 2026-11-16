@@ -10,17 +10,17 @@ import uuid
 import zipfile
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer, QSize
+from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer, QSize, QSignalBlocker
 from PySide6.QtGui import QPixmap, QDesktopServices, QIcon
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLineEdit, QLabel, QListWidget, QListWidgetItem, QSplitter, QFileDialog,
-    QProgressBar, QMessageBox, QStackedWidget, QSlider, QScrollArea, QGridLayout, QSizePolicy)
+    QProgressBar, QMessageBox, QStackedWidget, QSlider, QSizePolicy)
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtMultimediaWidgets import QVideoWidget
 
 from . import __version__
-from .core import Settings, UserError, Cancelled, data_dir, save_selection, public_url
-from .appearance import STYLE, app_icon, checkbox_image
+from .core import Settings, UserError, Cancelled, data_dir, save_selection, public_url, copy_stream
+from .appearance import STYLE, app_icon, checkbox_image, line_icon, empty_artwork
 from .image_preview import ImagePreview, PortraitFrame
 from . import windows_shell
 from . import engines
@@ -31,6 +31,7 @@ class Task(QThread):
     progress = Signal(int, str)
     result = Signal(object)
     error = Signal(str)
+    cancelled = Signal(str)
 
     def __init__(self, action, parent):
         super().__init__(parent)
@@ -40,7 +41,9 @@ class Task(QThread):
     def run(self):
         try:
             self.result.emit(self.action(self.cancel, self.progress.emit))
-        except (UserError, Cancelled, UpdateError) as e:
+        except Cancelled as e:
+            self.cancelled.emit(str(e))
+        except (UserError, UpdateError) as e:
             self.error.emit(str(e))
         except OSError:
             self.error.emit("No se pudo acceder a un archivo. Revisá los permisos y el espacio libre de la carpeta.")
@@ -91,8 +94,10 @@ class Window(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"MediaDownloader · {__version__}")
-        self.resize(1280, 900)
-        self.setMinimumSize(980, 760)
+        self.setMinimumSize(980, 660)
+        available = self.screen().availableGeometry()
+        self.resize(min(1240, max(980, available.width() - 48)),
+                    min(860, max(660, available.height() - 72)))
         self.setStyleSheet(STYLE)
         self.setWindowIcon(app_icon())
         self.setAcceptDrops(True)
@@ -115,21 +120,24 @@ class Window(QMainWindow):
             widget.setObjectName(name)
             return widget
 
-        def button(text, action, name="", tip=""):
+        def button(text, action, name="", tip="", icon=""):
             widget = QPushButton(text)
             widget.setObjectName(name)
             widget.setCursor(Qt.CursorShape.PointingHandCursor)
             widget.clicked.connect(action)
+            if icon:
+                widget.setIcon(line_icon(icon, "#281738" if name == "primary" else "#c3b9d2"))
+                widget.setIconSize(QSize(18, 18))
             if tip:
                 widget.setToolTip(tip)
             return widget
 
-        def card():
+        def card(name="card"):
             widget = QWidget()
-            widget.setObjectName("card")
+            widget.setObjectName(name)
             box = QVBoxLayout(widget)
-            box.setContentsMargins(14, 12, 14, 12)
-            box.setSpacing(8)
+            box.setContentsMargins(16, 14, 16, 14)
+            box.setSpacing(10)
             return widget, box
 
         body = QWidget()
@@ -142,85 +150,74 @@ class Window(QMainWindow):
         header = QWidget()
         header.setObjectName("header")
         header_row = QHBoxLayout(header)
-        header_row.setContentsMargins(18, 8, 18, 8)
-        header_row.setSpacing(10)
+        header_row.setContentsMargins(22, 12, 22, 12)
+        header_row.setSpacing(12)
         logo = QLabel()
-        logo.setPixmap(self.windowIcon().pixmap(28, 28))
-        logo.setFixedSize(28, 28)
+        logo.setPixmap(self.windowIcon().pixmap(38, 38))
+        logo.setFixedSize(38, 38)
         header_row.addWidget(logo)
         brand_column = QVBoxLayout()
-        brand_column.setSpacing(3)
+        brand_column.setSpacing(1)
         brand_row = QHBoxLayout()
+        brand_row.setSpacing(9)
         brand_row.addWidget(label("MediaDownloader", "brand"))
         brand_row.addWidget(label(__version__, "version"))
         brand_row.addStretch()
         brand_column.addLayout(brand_row)
-        header_row.addLayout(brand_column)
-        header_row.addStretch()
-        header_row.addWidget(label("●  Conexión directa", "badge"))
-        self.update_button = button("Actualizar programa ↑", self.update_program, "quiet")
+        brand_column.addWidget(label("Fotos y videos en calidad original", "tagline"))
+        header_row.addLayout(brand_column, 1)
+        self.session_button = button("Sesión local", self.configure_session, "quiet",
+                                     "Administrar la sesión del navegador guardada en esta PC", "user")
+        self.update_button = button("Buscar actualizaciones", self.update_program, "quiet", icon="refresh")
+        header_row.addWidget(self.session_button)
         header_row.addWidget(self.update_button)
         outer.addWidget(header)
 
         content = QWidget()
-        content.setMinimumHeight(650)
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(18, 10, 18, 8)
+        layout.setContentsMargins(20, 14, 20, 10)
         layout.setSpacing(10)
 
-        source, source_box = card()
-        source_box.setContentsMargins(12, 8, 12, 8)
+        source, source_box = card("sourceCard")
+        source_box.setContentsMargins(12, 10, 12, 10)
         row = QHBoxLayout()
-        row.setSpacing(8)
-        row.addWidget(label("Enlace"))
+        row.setSpacing(12)
         self.url = LinkEdit()
+        self.url.setObjectName("sourceInput")
+        self.url.setAccessibleName("Enlace de origen")
         self.url.setPlaceholderText("Pegá o arrastrá un enlace de Instagram, TikTok o YouTube…")
         self.url.setToolTip("Pegá un enlace y presioná Enter, o arrastralo desde el navegador para analizarlo.")
+        self.url.addAction(line_icon("link"), QLineEdit.ActionPosition.LeadingPosition)
         self.url.link_dropped.connect(self.receive_link)
         self.url.setMinimumWidth(130)
         self.url.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.url.setClearButtonEnabled(True)
-        self.analyze_button = button("Analizar enlace →", self.analyze, "primary")
-        self.analyze_button.setMinimumWidth(125)
+        self.analyze_button = button("Analizar enlace", self.analyze, "primary", icon="arrow")
+        self.analyze_button.setMinimumWidth(150)
         self.url.returnPressed.connect(self.analyze)
         row.addWidget(self.url, 1)
         row.addWidget(self.analyze_button)
-        row.addSpacing(10)
-        row.addWidget(label("Guardar en"))
-        self.folder = QLineEdit(self.settings.destination)
-        self.folder.setReadOnly(True)
-        self.folder.setAcceptDrops(False)
-        self.folder.setMinimumWidth(130)
-        self.folder.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-        self.folder.setPlaceholderText("Elegí una carpeta para tus descargas")
-        self.folder_button = button("Carpeta…", self.choose_folder, "quiet")
-        self.open_button = button("Abrir ↗", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(self.folder.text())) if self.folder.text() else None, "quiet")
-        row.addWidget(self.folder, 1)
-        row.addWidget(self.folder_button)
-        row.addWidget(self.open_button)
         source_box.addLayout(row)
         layout.addWidget(source)
 
         split = QSplitter(Qt.Orientation.Horizontal)
         split.setChildrenCollapsible(False)
-        split.setMinimumHeight(420)
+        split.setHandleWidth(14)
         self.content_split = split
         left, column = card()
-        left.setMinimumWidth(275)
-        left.setMaximumWidth(380)
-        left_column = column
+        left.setMinimumWidth(280)
+        left.setMaximumWidth(370)
         row = QHBoxLayout()
-        row.addWidget(label("02 / CONTENIDO", "eyebrow"))
+        row.addWidget(label("Contenido", "sectionTitle"))
         row.addStretch()
         self.count_label = label("0 elementos", "badge")
         row.addWidget(self.count_label)
         column.addLayout(row)
-        selection_title = label("Elegí qué guardar", "sectionTitle")
-        selection_title.setStyleSheet("font-size: 17px;")
-        selection_title.setToolTip("El orden original se mantiene en tus archivos.")
-        column.addWidget(selection_title)
         self.list = QListWidget()
+        self.list.setAccessibleName("Archivos del enlace")
         self.list.setIconSize(QSize(32, 32))
+        self.list.setSpacing(3)
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         check_path = Path(self.cache.name) / "checked.png"
         checkbox_image().save(str(check_path))
         self.list.setStyleSheet('QListWidget::indicator:checked { image: url("' + check_path.as_posix() + '"); background: transparent; border: none; }')
@@ -228,18 +225,20 @@ class Window(QMainWindow):
         self.list.itemChanged.connect(self.update_selection_label)
         self.list_stack = QStackedWidget()
         empty = QWidget()
-        empty.setObjectName("previewSurface")
+        empty.setObjectName("listEmpty")
         empty_box = QVBoxLayout(empty)
-        empty_box.setSpacing(12)
+        empty_box.setContentsMargins(12, 12, 12, 12)
+        empty_box.setSpacing(10)
         empty_box.addStretch()
-        empty_mark = label("▧", "emptyTitle")
-        empty_mark.setStyleSheet("font-size: 42px; color: #87659f;")
+        empty_mark = QLabel()
+        empty_mark.setPixmap(QPixmap.fromImage(empty_artwork(136)).scaled(
+            68, 68, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         empty_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_box.addWidget(empty_mark)
-        empty_title = label("Tu próxima referencia", "emptyTitle")
+        empty_title = label("Tu próxima descarga", "emptyTitle")
         empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_box.addWidget(empty_title)
-        hint = label("Pegá un enlace y analizalo.\nSus fotos y videos aparecerán acá.", "emptyHint")
+        hint = label("Analizá un enlace para elegir\nqué fotos y videos guardar.", "emptyHint")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setWordWrap(True)
         empty_box.addWidget(hint)
@@ -248,34 +247,42 @@ class Window(QMainWindow):
         self.list_stack.addWidget(self.list)
         column.addWidget(self.list_stack, 1)
         row = QHBoxLayout()
+        row.setSpacing(8)
         self.select_all = button("Marcar todos", lambda: self.mark(True), "quiet")
         self.select_none = button("Desmarcar", lambda: self.mark(False), "quiet")
-        row.addWidget(self.select_all)
-        row.addWidget(self.select_none)
-        row.addStretch()
+        row.addWidget(self.select_all, 1)
+        row.addWidget(self.select_none, 1)
         column.addLayout(row)
         split.addWidget(left)
 
-        right, column = card()
+        right, column = card("previewCard")
         row = QHBoxLayout()
-        self.details = label("Previsualización", "sectionTitle")
-        self.details.setStyleSheet("font-size: 16px;")
+        self.details = label("Vista previa", "sectionTitle")
         self.details.setTextFormat(Qt.TextFormat.PlainText)
         self.details.setWordWrap(True)
-        self.details.setMaximumHeight(38)
+        self.details.setMaximumHeight(40)
         row.addWidget(self.details, 1)
-        row.addWidget(label("Original intacto", "badge"))
+        row.addWidget(label("CALIDAD ORIGINAL", "eyebrow"))
         column.addLayout(row)
         self.stack = QStackedWidget()
-        self.image = ImagePreview("Tu contenido, en primer plano.\n\nAnalizá un enlace para ver la previsualización.")
+        self.image = ImagePreview()
         self.image.setObjectName("previewSurface")
         self.image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image.setWordWrap(True)
         self.image.setMinimumSize(0, 0)
-        self.image.setStyleSheet("QLabel { background: #100d17; color: #9d89b2; border: 1px solid #4a355f; border-radius: 10px; padding: 2px; }")
+        art_path = Path(self.cache.name) / "preview-empty.png"
+        empty_artwork(192).save(str(art_path))
+        self.image.setText(
+            f'<div><img src="{art_path.as_uri()}" width="88" height="88" /></div>'
+            '<p style="font-size: 17px; font-weight: 600; color: #e6dbf5;">Todo empieza con un enlace</p>'
+            '<p style="font-size: 12px; color: #a498b3;">Fotos, videos y carruseles.<br />Explorá antes de descargar.</p>'
+        )
         self.video = QVideoWidget()
         self.stack.addWidget(self.image)
         self.stack.addWidget(self.video)
         self.portrait = PortraitFrame(self.stack)
+        # Small notebooks still keep the destination and download actions on screen.
+        self.portrait.setMinimumSize(180, 138)
         column.addWidget(self.portrait, 1)
         self.player = QMediaPlayer(self)
         self.audio = QAudioOutput(self)
@@ -283,25 +290,31 @@ class Window(QMainWindow):
         self.player.setVideoOutput(self.video)
         self.player.errorOccurred.connect(lambda *_: self.status.setText("No se pudo reproducir este códec. Podés guardar el archivo original sin recompresión."))
         row = QHBoxLayout()
-        self.preview_button = button("Reintentar", self.preview, "quiet")
+        self.preview_button = button("Reintentar", self.preview, "quiet", icon="refresh")
         self.preview_button.hide()
         self.zoom = QSlider(Qt.Orientation.Horizontal)
         self.zoom.setRange(25, 200)
         self.zoom.setValue(80)
+        self.zoom.setAccessibleName("Zoom de la imagen")
         self.zoom.setToolTip("100% ajusta la imagen al panel. Arrastrá la foto para moverla al ampliar.")
         self.zoom_label = label("80%")
+        self.zoom_label.setFixedWidth(38)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.zoom.valueChanged.connect(self.change_zoom)
         self.zoom_controls = QWidget()
+        self.zoom_controls.setObjectName("previewTools")
         zoom_row = QHBoxLayout(self.zoom_controls)
         zoom_row.setContentsMargins(0, 0, 0, 0)
+        zoom_row.setSpacing(12)
         zoom_row.addWidget(label("Zoom"))
         zoom_row.addWidget(self.zoom, 1)
         zoom_row.addWidget(self.zoom_label)
-        zoom_row.addWidget(button("Ajustar", lambda: self.zoom.setValue(100), "quiet"))
+        zoom_row.addWidget(button("Ajustar", lambda: self.zoom.setValue(100), "quiet", icon="fit"))
         column.addWidget(self.zoom_controls)
-        self.play_button = button("▶ / Pausa", self.toggle_play, "quiet")
+        self.play_button = button("Reproducir / Pausa", self.toggle_play, "quiet", icon="play")
         self.play_button.hide()
         self.seek = QSlider(Qt.Orientation.Horizontal)
+        self.seek.setAccessibleName("Posición del video")
         self.seek.hide()
         self.seek.sliderMoved.connect(self.player.setPosition)
         self.player.positionChanged.connect(self.seek.setValue)
@@ -311,31 +324,44 @@ class Window(QMainWindow):
         row.addWidget(self.seek, 1)
         column.addLayout(row)
         split.addWidget(right)
-        split.setSizes([300, 880])
+        split.setSizes([310, 890])
         split.setStretchFactor(0, 0)
         split.setStretchFactor(1, 1)
         layout.addWidget(split, 1)
 
-        downloads, download_box = card()
-        download_box.setContentsMargins(20, 13, 20, 13)
+        downloads, download_box = card("downloadActions")
+        download_box.setContentsMargins(16, 10, 16, 10)
+        download_box.setSpacing(9)
+        destination_row = QHBoxLayout()
+        destination_row.setSpacing(10)
+        destination_row.addWidget(label("GUARDAR EN", "eyebrow"))
+        self.folder = QLineEdit(self.settings.destination)
+        self.folder.setObjectName("destinationInput")
+        self.folder.setAccessibleName("Carpeta de destino")
+        self.folder.setReadOnly(True)
+        self.folder.setAcceptDrops(False)
+        self.folder.setMinimumWidth(130)
+        self.folder.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.folder.setPlaceholderText("Elegí una carpeta para tus descargas")
+        self.folder_button = button("Elegir carpeta", self.choose_folder, "quiet", icon="folder")
+        self.open_button = button("Abrir", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(self.folder.text())) if self.folder.text() else None,
+                                  "quiet", "Abrir la carpeta de destino", "open")
+        destination_row.addWidget(self.folder, 1)
+        destination_row.addWidget(self.folder_button)
+        destination_row.addWidget(self.open_button)
+        download_box.addLayout(destination_row)
         row = QHBoxLayout()
-        selection_column = QVBoxLayout()
-        selection_column.setSpacing(4)
+        row.setSpacing(8)
         self.selection_label = label("Sin elementos seleccionados")
-        selection_column.addWidget(self.selection_label)
-        download_box.addLayout(selection_column)
+        row.addWidget(self.selection_label, 1)
         self.download_one = button("Guardar visible", lambda: self.download("one"), "quiet")
         self.download_selected = button("Guardar selección", lambda: self.download("selected"))
         self.download_all = button("Guardar todos", lambda: self.download("all"))
-        self.download_zip = button("Descargar ZIP ↓", lambda: self.download("zip"), "primary")
-        grid = QGridLayout()
-        grid.setSpacing(6)
-        for i, widget in enumerate((self.download_one, self.download_selected, self.download_all, self.download_zip)):
-            grid.addWidget(widget, i // 2, i % 2)
-        download_box.addLayout(grid)
-        download_box.setContentsMargins(0, 6, 0, 0)
-        downloads.setObjectName("downloadActions")
-        left_column.addWidget(downloads)
+        self.download_zip = button("Descargar ZIP", lambda: self.download("zip"), "primary", icon="download")
+        for widget in (self.download_one, self.download_selected, self.download_all, self.download_zip):
+            row.addWidget(widget)
+        download_box.addLayout(row)
+        layout.addWidget(downloads)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
@@ -343,26 +369,20 @@ class Window(QMainWindow):
         self.progress.setTextVisible(False)
         layout.addWidget(self.progress)
         row = QHBoxLayout()
-        self.status = label("Listo para tu próximo enlace.")
+        row.setSpacing(12)
+        self.status = label("Listo. Pegá un enlace para empezar.")
         self.status.setWordWrap(True)
+        self.status.setMinimumWidth(160)
         row.addWidget(self.status, 1)
+        self.restore_button = button("Recuperar versión anterior", lambda: self.launch_update(None, True), "textButton")
+        row.addWidget(self.restore_button)
         self.cancel_button = button("Cancelar", self.cancel, "quiet")
         self.cancel_button.setEnabled(False)
         row.addWidget(self.cancel_button)
         layout.addLayout(row)
-        footer = QHBoxLayout()
-        self.session_button = button("Sesión local…", self.configure_session, "quiet")
-        self.restore_button = button("Recuperar versión anterior", lambda: self.launch_update(None, True), "quiet")
-        footer.addWidget(self.session_button)
-        footer.addWidget(self.restore_button)
-        footer.addStretch()
-        layout.addLayout(footer)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setWidget(content)
-        outer.addWidget(scroll, 1)
+        # A direct layout can shrink to the notebook viewport. A wrapping scroll
+        # area treats the preview's preferred height as a minimum and hides actions.
+        outer.addWidget(content, 1)
         self.controls = [self.url, self.analyze_button, self.folder_button, self.session_button,
                          self.update_button, self.restore_button, self.select_all, self.select_none,
                          self.preview_button, self.download_one, self.download_selected,
@@ -375,6 +395,8 @@ class Window(QMainWindow):
         self.selection_label.setText(f"{count} de {len(self.items)} seleccionados" if self.items
                                      else "Sin elementos seleccionados")
         self.count_label.setText(f"{len(self.items)} elemento{'s' if len(self.items) != 1 else ''}")
+        for button in (self.download_selected, self.download_zip):
+            button.setEnabled(bool(count) and not self.task)
 
     def refresh_controls(self, busy):
         for control in self.controls:
@@ -385,18 +407,21 @@ class Window(QMainWindow):
             button.setEnabled(not busy and bool(self.items))
         self.restore_button.setEnabled(not busy and getattr(sys, "frozen", False)
                                        and locations(Path(sys.executable).parent)[0].is_dir())
+        self.update_selection_label()
 
     def start(self, action, done):
         if self.task:
             return
         if self.preview_task:
             self.preview_task.cancel.set()
-        self.refresh_controls(True)
+        self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self.task = Task(action, self)
+        self.refresh_controls(True)
         self.task.progress.connect(self.report)
         self.task.result.connect(done)
         self.task.error.connect(self.failed)
+        self.task.cancelled.connect(lambda message: self.report(0, message))
         self.task.finished.connect(self.task_finished)
         self.task.start()
 
@@ -407,7 +432,7 @@ class Window(QMainWindow):
         self.status.setText(message)
 
     def failed(self, message):
-        self.status.setText(message)
+        self.report(0, message)
         if not self.pending_close:
             QMessageBox.warning(self, "MediaDownloader", message)
 
@@ -422,6 +447,9 @@ class Window(QMainWindow):
     def task_finished(self):
         old, self.task = self.task, None
         old.deleteLater()
+        if self.progress.maximum() == 0:
+            self.progress.setRange(0, 100)
+            self.progress.setValue(0)
         self.refresh_controls(False)
         if self.pending_close:
             self.close()
@@ -478,27 +506,39 @@ class Window(QMainWindow):
 
     def analyzed(self, items):
         self.player.stop(); self.player.setSource(QUrl())
+        # Retain only this source's previews. An active worker owns its directory
+        # until it finishes; preview_finished removes it if the result is stale.
+        active_folder = getattr(self.preview_task, "cache_folder", None)
+        if self.preview_task:
+            self.preview_task.cancel.set()
+        for folder in {path.parent for path in (*self.previews.values(), *self.thumbnails.values())}:
+            if folder != active_folder:
+                shutil.rmtree(folder, ignore_errors=True)
         self.items = items
         self.preview_generation += 1
         self.previews = {}
         self.thumbnails = {}
         self.preview_failures = set()
-        self.list.clear()
-        for item in items:
-            row = QListWidgetItem(f"{item.index:03d} · {'Video' if item.kind == 'video' else 'Foto'}")
-            row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            row.setCheckState(Qt.CheckState.Checked)
-            self.list.addItem(row)
+        with QSignalBlocker(self.list):
+            self.list.clear()
+            for item in items:
+                row = QListWidgetItem(f"{item.index:03d} · {'Video' if item.kind == 'video' else 'Foto'}")
+                row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                row.setCheckState(Qt.CheckState.Checked)
+                self.list.addItem(row)
+            self.list.setCurrentRow(0)
         self.list_stack.setCurrentIndex(1 if items else 0)
         self.update_selection_label()
-        self.list.setCurrentRow(0)
+        self.show_current(self.list.currentRow())
         self.report(100, f"{len(items)} elemento(s) encontrados. Las previsualizaciones se cargan automáticamente.")
         self.refresh_controls(bool(self.task))
         QTimer.singleShot(0, self.queue_preview)
 
     def mark(self, selected):
-        for i in range(self.list.count()):
-            self.list.item(i).setCheckState(Qt.CheckState.Checked if selected else Qt.CheckState.Unchecked)
+        with QSignalBlocker(self.list):
+            for i in range(self.list.count()):
+                self.list.item(i).setCheckState(Qt.CheckState.Checked if selected else Qt.CheckState.Unchecked)
+        self.update_selection_label()
 
     def show_current(self, index):
         self.player.stop(); self.player.setSource(QUrl())
@@ -582,8 +622,9 @@ class Window(QMainWindow):
             if kind == "thumb" or item.kind != "video":
                 pixmap = QPixmap(str(path))
                 if not pixmap.isNull():
-                    self.list.item(index).setIcon(QIcon(pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio,
-                                                                    Qt.TransformationMode.SmoothTransformation)))
+                    with QSignalBlocker(self.list):
+                        self.list.item(index).setIcon(QIcon(pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio,
+                                                                        Qt.TransformationMode.SmoothTransformation)))
             if kind == "full" and index == self.list.currentRow():
                 self.show_current(index)
                 if item.kind != "video" and (not self.pixmap or self.pixmap.isNull()):
@@ -596,6 +637,7 @@ class Window(QMainWindow):
                 self.show_current(self.list.currentRow())
                 self.status.setText(message)
         task = self.preview_task = Task(action, self)
+        task.cache_folder = folder
         task.result.connect(done)
         task.error.connect(error)
         task.finished.connect(self.preview_finished)
@@ -603,6 +645,9 @@ class Window(QMainWindow):
 
     def preview_finished(self):
         old, self.preview_task = self.preview_task, None
+        retained = (*self.previews.values(), *self.thumbnails.values())
+        if not any(path.parent == old.cache_folder for path in retained):
+            shutil.rmtree(old.cache_folder, ignore_errors=True)
         old.deleteLater()
         if self.pending_close:
             self.close()
@@ -635,8 +680,11 @@ class Window(QMainWindow):
             cached = self.previews.get(item.index)
             if cached and cached.exists():
                 folder.mkdir(parents=True, exist_ok=True)
-                path = folder / item.filename
-                shutil.copy2(cached, path)
+                path = folder / Path(item.filename).with_suffix(cached.suffix)
+                with cached.open("rb") as source, path.open("wb") as target:
+                    copy_stream(source, target, cached.stat().st_size, cancel,
+                                lambda percent: progress(percent, "Guardando la previsualización original…"))
+                shutil.copystat(cached, path)
                 return path
             return engines.fetch(item, folder, cancel, progress, cookies)
         folder = self.folder.text()

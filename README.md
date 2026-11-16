@@ -16,6 +16,10 @@ Los parches identifican la versión base. Si no hay un parche directo, el progra
 
 ## Uso y datos
 
+La versión 1.1.0 renueva la interfaz violeta: enlace arriba, biblioteca y visor en el centro, y carpeta de destino junto a las acciones de descarga. El diseño se adapta a notebooks y mantiene visibles las acciones principales. Se conservan los enlaces arrastrables, el zoom, la reproducción, los cuatro modos de guardado, las preferencias y el actualizador del programa.
+
+También reduce el uso temporal de disco al crear ZIPs, permite cancelar mientras copia archivos grandes y libera las previsualizaciones del enlace anterior. Las descargas directas se publican solo cuando terminan correctamente; un corte de conexión no reemplaza un archivo completo por uno parcial. Las exportaciones conservan la extensión real del contenedor, incluido MKV.
+
 Pegar enlace público → Analizar → elegir elementos → guardar visible/selección/todos/ZIP. Previsualizaciones automáticas, miniaturas compactas, visor vertical y zoom para fotos. Los originales se guardan sin recomprimir; FFmpeg combina audio/video sin recodificar y puede producir MKV.
 
 Desde 1.0.19 también se puede arrastrar un enlace desde el navegador al campo Enlace o a la ventana: comienza el análisis automáticamente. Admite un enlace por vez de Instagram, TikTok o YouTube. Pegar y presionar Enter o Analizar sigue disponible.

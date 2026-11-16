@@ -50,6 +50,7 @@ def stop_process(process):
 
 def run_engine(engine, args, cancel, timeout=180):
     # Files avoid pipe deadlocks on large playlists and don't expose session tokens in logs.
+    check_cancel(cancel)
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         process = subprocess.Popen(engine_command(engine, args), stdout=stdout, stderr=stderr,
                                    creationflags=CREATE_NO_WINDOW, start_new_session=os.name != "nt")
@@ -60,6 +61,7 @@ def run_engine(engine, args, cancel, timeout=180):
                 if time.monotonic() - started > timeout:
                     raise UserError("La plataforma tardó demasiado. Intentá otra vez o usá una sesión local.")
                 cancel.wait(0.1)
+            check_cancel(cancel)
             stdout.seek(0)
             raw = stdout.read(32 * 1024 * 1024)
             if process.returncode:
@@ -203,18 +205,26 @@ def session(cookies=""):
 
 
 def direct_download(url, path, cancel, progress, cookies="", referer=""):
+    check_cancel(cancel)
     if urlsplit(url).scheme != "https":
         raise UserError("La plataforma devolvió un enlace de descarga inseguro.")
+    temporary = None
     try:
-        with session(cookies) as client, client.get(url, headers={"Referer": referer},
+        with session(cookies) as client, client.get(url, headers={"Referer": referer, "Accept-Encoding": "identity"},
                 stream=True, timeout=(15, 35)) as response:
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "").lower()
             if content_type.startswith("text/") or "application/json" in content_type:
                 raise UserError("La plataforma devolvió una página de acceso en lugar del archivo. Volvé a Analizar o cargá una sesión local.")
-            total = int(response.headers.get("Content-Length", 0))
+            # requests decodes HTTP content encoding while iterating. Its wire
+            # length is only comparable to saved bytes for identity responses.
+            length = response.headers.get("Content-Length", "").strip()
+            encoded = response.headers.get("Content-Encoding", "identity").lower() != "identity"
+            total = int(length) if length.isdigit() and not encoded else 0
             received = 0
-            with path.open("wb") as f:
+            check_cancel(cancel)
+            fd, temporary = tempfile.mkstemp(prefix=".download-", suffix=".part", dir=path.parent)
+            with os.fdopen(fd, "wb") as f:
                 for block in response.iter_content(256 * 1024):
                     check_cancel(cancel)
                     f.write(block)
@@ -223,8 +233,13 @@ def direct_download(url, path, cancel, progress, cookies="", referer=""):
                              f"Descargando {received / 1048576:.1f} MB…")
             if not received or total and received != total:
                 raise UserError("La descarga llegó incompleta. Volvé a intentarlo.")
+            check_cancel(cancel)
+            os.replace(temporary, path)
     except requests.RequestException:
         raise UserError("No se pudo descargar. Revisá la conexión; si el enlace venció, volvé a Analizar. Puede requerir sesión local.") from None
+    finally:
+        if temporary is not None:
+            Path(temporary).unlink(missing_ok=True)
 
 
 def ffmpeg_location():
@@ -247,6 +262,7 @@ def youtube_options():
 
 
 def fetch(item, folder, cancel, progress, cookies=""):
+    check_cancel(cancel)
     folder.mkdir(parents=True, exist_ok=True)
     if item.engine == "gallery-dl":
         path = folder / item.filename
@@ -296,6 +312,7 @@ def fetch(item, folder, cancel, progress, cookies=""):
                 percent = min(99, int(float(matches[-1]))) if matches else 0
                 progress(percent, f"Descargando y combinando sin recompresión: {size / 1048576:.1f} MB…")
                 cancel.wait(0.25)
+            check_cancel(cancel)
             if proc.returncode:
                 raise UserError("No se pudo obtener el video con audio. Volvé a Analizar, cargá una sesión local o actualizá el programa.")
         finally:
